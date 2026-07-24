@@ -1,0 +1,13 @@
+{
+  "name": "higher-lower",
+  "version": "1.0.0",
+  "private": true,
+  "description": "One-page higher/lower drinking game with live odds and a camera mode that counts a real deck",
+  "scripts": {
+    "test": "node test/engine.test.js && node test/vision.test.js && node test/ui.test.js && node test/live.test.js",
+    "test:node": "node test/engine.test.js && node test/vision.test.js"
+  },
+  "devDependencies": {
+    "playwright-core": "^1.45.0"
+  }
+}
