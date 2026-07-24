@@ -31,29 +31,36 @@
 
   /* ---- header ---- */
   header {
-    display: flex; align-items: center; gap: 6px;
-    padding: 10px 4px;
-    font-size: 20px; font-weight: 800;
+    display: flex; align-items: center; gap: 4px;
+    padding: 10px 2px;
+    font-size: 19px; font-weight: 800;
   }
   .stat {
-    display: flex; align-items: center; gap: 5px;
+    display: flex; align-items: center; gap: 4px;
     background: #161b24; border: 1px solid #29303d;
-    border-radius: 14px; padding: 8px 10px;
+    border-radius: 14px; padding: 8px 8px;
     min-height: 48px;
   }
   .stat .lbl { font-size: 13px; font-weight: 700; color: #9aa4b6; text-transform: uppercase; letter-spacing: .06em; }
-  #modeBtn {
-    min-height: 48px; padding: 8px 12px;
-    font: inherit; font-size: 17px; font-weight: 800; color: #f2f4f8;
+  #modeBtn, #nateBtn, #wernerBtn {
+    min-height: 48px; padding: 8px 9px;
+    font: inherit; font-size: 16px; font-weight: 800; color: #f2f4f8;
     background: #161b24; border: 1px solid #29303d; border-radius: 14px;
     cursor: pointer;
     white-space: nowrap;
   }
   #modeBtn.live { background: #103042; border-color: #2196c9; color: #7fd6ff; }
+  #nateBtn, #wernerBtn { min-width: 44px; padding: 8px 6px; }
+  #nateBtn.on, #wernerBtn.on { background: #3a2c0e; border-color: #ffc53d; }
+  #nateBtn:active, #wernerBtn:active { transform: scale(.96); }
+  @media (max-width: 460px) {
+    .stat .lbl { display: none; } /* keep all six header controls tappable */
+    #modeBtn { font-size: 15px; }
+  }
   #newgame {
     margin-left: auto;
-    min-height: 48px; padding: 8px 16px;
-    font: inherit; font-size: 17px; font-weight: 800; color: #0b0e14;
+    min-height: 48px; padding: 8px 12px;
+    font: inherit; font-size: 16px; font-weight: 800; color: #0b0e14;
     background: #f2f4f8; border: none; border-radius: 14px;
     cursor: pointer;
     white-space: nowrap;
@@ -90,6 +97,14 @@
   #winChance.good { color: #3ddc84; }
   #winChance.mid  { color: #ffc53d; }
   #winChance.bad  { color: #ff6b74; }
+  #scoreChip {
+    position: absolute; left: 9px; top: 0; bottom: 0;
+    display: flex; align-items: center;
+    font-size: 13px; font-weight: 900; color: #ffc53d;
+    text-shadow: 0 1px 1px rgba(0,0,0,.7);
+  }
+  .guess .pts { font-size: 12px; font-weight: 800; color: #ffc53d; }
+  .guess.best .pts, .guess.armed .pts { color: inherit; }
 
   /* ---- camera strip (Live mode) ---- */
   #cam {
@@ -190,6 +205,18 @@
   .card.h1::before, .card.h1::after { display: none; }
   .card.h2::after { display: none; }
 
+  /* face-down pile (Nate mode) — tap to flip */
+  .card.back {
+    background: #1d2b4a repeating-linear-gradient(135deg, rgba(255,255,255,.07) 0 6px, transparent 6px 12px);
+    cursor: pointer;
+  }
+  .card.back::before, .card.back::after { display: none; }
+  .card.back .pip { color: #7f96c9; font-size: 36px; }
+  .card.back:active { transform: scale(.97); }
+
+  /* blind guess buttons (Nate mode): arrows only, no odds */
+  .guess.blind .arrow { font-size: 26px; }
+
   /* empty slot during Live setup */
   .card.empty {
     background: transparent;
@@ -204,7 +231,7 @@
   .btns { display: flex; flex-direction: column; gap: 5px; }
   .guess {
     min-height: 52px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
     font: inherit; font-size: 19px; font-weight: 900; color: #ffffff;
     background: #1e2530; border: 1px solid #303a4a; border-radius: 12px;
     cursor: pointer;
@@ -325,9 +352,11 @@
     <div class="stat"><span class="lbl">Deck</span><span id="deckCount">–</span></div>
     <div class="stat">🍺<span id="drinkCount">0</span></div>
     <button id="modeBtn" title="Toggle camera Live mode">📷 Live</button>
+    <button id="nateBtn" title="Nate mode: face-down deal, flip to play, triple win bonus">😎</button>
+    <button id="wernerBtn" title="Wacky Werner: once you guess a pile you're stuck with it until it busts">🤪</button>
     <button id="newgame">New</button>
   </header>
-  <div id="progress"><div id="progressFill"></div><span id="progressLbl"></span><span id="winChance"></span></div>
+  <div id="progress"><div id="progressFill"></div><span id="progressLbl"></span><span id="scoreChip"></span><span id="winChance"></span></div>
   <div id="cam">
     <video id="camVideo" playsinline muted></video>
     <canvas id="camOverlay"></canvas>
@@ -372,7 +401,11 @@ const Engine = (() => {
     return deck;
   }
 
-  function newGame(rng) {
+  // nate=true deals every pile face-down: it must be flipped before it can be
+  // played, and nothing about its card is shown until then.
+  // werner=true is Wacky Werner: once you guess on a pile you're locked to it
+  // until it busts (state.lock is the pile you're riding, -1 = free choice).
+  function newGame(rng, nate, werner) {
     rng = rng || Math.random;
     const deck = fullDeck();
     for (let i = deck.length - 1; i > 0; i--) {
@@ -380,8 +413,18 @@ const Engine = (() => {
       [deck[i], deck[j]] = [deck[j], deck[i]];
     }
     const piles = [];
-    for (let i = 0; i < PILES; i++) piles.push({ cards: [deck.pop()], alive: true });
-    return { deck, piles, drinks: 0, over: false, reason: null };
+    for (let i = 0; i < PILES; i++) piles.push({ cards: [deck.pop()], alive: true, revealed: !nate });
+    return { deck, piles, drinks: 0, over: false, reason: null,
+             nate: !!nate, werner: !!werner, lock: -1,
+             score: 0, streak: { pile: -1, n: 0 }, bonus: null };
+  }
+
+  // Nate mode: reveal a face-down pile so it can be played.
+  function flip(state, i) {
+    const pile = state.piles[i];
+    if (state.over || !pile.alive || pile.revealed) return false;
+    pile.revealed = true;
+    return true;
   }
 
   // Exact clean-win odds from the remaining deck's known composition.
@@ -408,9 +451,12 @@ const Engine = (() => {
     const counts = new Uint8Array(15);
     for (const c of state.deck) counts[c.rank]++;
     const tops0 = [];
-    for (const p of state.piles) {
-      if (p.alive && p.cards.length) tops0.push(p.cards[p.cards.length - 1].rank);
-    }
+    let lock0 = -1; // Werner: index into tops0 of the pile being ridden
+    state.piles.forEach((p, i) => {
+      if (!(p.alive && p.cards.length)) return;
+      if (state.werner && state.lock === i) lock0 = tops0.length;
+      tops0.push(p.cards[p.cards.length - 1].rank);
+    });
     if (!tops0.length || !state.deck.length) return 0;
     if (!rng) {
       let h = 2166136261 ^ state.deck.length;
@@ -424,22 +470,30 @@ const Engine = (() => {
     for (let k = 0; k < n; k++) {
       const cnt = counts.slice();
       const tops = tops0.slice();
-      let left = state.deck.length, alive = tops.length;
+      let left = state.deck.length, alive = tops.length, lock = lock0;
       while (left > 0 && alive > 0) {
         for (let r = 2; r <= 14; r++) below[r + 1] = below[r] + cnt[r];
         let bi = 0, bw = -1, bdir = 1;
-        for (let i = 0; i < alive; i++) {
-          const t = tops[i];
-          const lo = below[t], hi = left - below[t + 1];
-          const w = hi >= lo ? hi : lo;
-          if (w > bw) { bw = w; bi = i; bdir = hi >= lo ? 1 : -1; }
+        if (lock >= 0) { // Werner: the ridden pile is the only legal play
+          bi = lock;
+          const t = tops[bi];
+          bdir = left - below[t + 1] >= below[t] ? 1 : -1;
+        } else {
+          for (let i = 0; i < alive; i++) {
+            const t = tops[i];
+            const lo = below[t], hi = left - below[t + 1];
+            const w = hi >= lo ? hi : lo;
+            if (w > bw) { bw = w; bi = i; bdir = hi >= lo ? 1 : -1; }
+          }
         }
         let pick = (rng() * left) | 0, r = 1;
         do { r++; pick -= cnt[r]; } while (pick >= 0);
         cnt[r]--; left--;
         const t = tops[bi];
-        if (r === t || (bdir > 0 ? r > t : r < t)) tops[bi] = r; // win/tie: new top
-        else { alive--; tops[bi] = tops[alive]; }                // bust: drop pile
+        if (r === t || (bdir > 0 ? r > t : r < t)) { // win/tie: new top
+          tops[bi] = r;
+          if (state.werner) lock = bi;
+        } else { alive--; tops[bi] = tops[alive]; lock = -1; } // bust: drop pile
       }
       if (left === 0) wins++;
     }
@@ -447,10 +501,13 @@ const Engine = (() => {
   }
 
   // Best (pile, direction) across live piles; null when none playable.
+  // Face-down piles are excluded — there is nothing to recommend about them —
+  // and a Werner lock narrows the choice to the pile you're riding.
   function recommend(state) {
     let best = null;
     state.piles.forEach((pile, i) => {
-      if (!pile.alive) return;
+      if (!pile.alive || pile.revealed === false) return;
+      if (state.werner && state.lock >= 0 && state.lock !== i) return;
       const p = probs(state, i);
       const dir = p.higher >= p.lower ? 'higher' : 'lower';
       const win = Math.max(p.higher, p.lower);
@@ -459,41 +516,66 @@ const Engine = (() => {
     return best;
   }
 
-  // Shared win/tie/loss application: the card is already off the deck.
-  function resolve(state, pile, dir, card) {
+  // Shared win/tie/loss application: the card is already off the deck; p is
+  // the shown win probability for the chosen direction, captured before the
+  // draw so scoring pays exactly the odds the player saw.
+  function resolve(state, i, dir, card, p) {
+    const pile = state.piles[i];
     const top = pile.cards[pile.cards.length - 1];
     pile.cards.push(card);
     const win = dir === 'higher' ? card.rank > top.rank : card.rank < top.rank;
     const tie = card.rank === top.rank;
-    let sips = 0;
-    if (!win) {
+    let sips = 0, pts = 0;
+    if (win) {
+      // risk pays: 100×(1−odds), × pile height (the sips that were at stake),
+      // × streak bonus (+50% per consecutive win on this same pile)
+      const n = state.streak.pile === i ? state.streak.n + 1 : 1;
+      state.streak = { pile: i, n };
+      pts = Math.round(100 * (1 - p) * pile.cards.length * (1 + 0.5 * (n - 1)));
+      state.score += pts;
+    } else {
       sips = pile.cards.length; // sips to drink: the pile, drawn card included
       state.drinks++;           // the counter tracks drink events: busts + ties
       if (!tie) pile.alive = false; // tie: drink and live
+      state.streak = { pile: -1, n: 0 }; // tie or bust breaks the streak
     }
     if (state.deck.length === 0) { state.over = true; state.reason = 'deck'; }
-    else if (state.piles.every(p => !p.alive)) { state.over = true; state.reason = 'dead'; }
-    return { card, win, tie, sips };
+    else if (state.piles.every(pl => !pl.alive)) { state.over = true; state.reason = 'dead'; }
+    if (state.over) {
+      // untouched = never guessed on (every guess grows a pile past 1 card);
+      // winning blind (Nate mode) pays triple
+      const untouched = state.piles.filter(pl => pl.cards.length === 1).length;
+      state.bonus = { untouched: untouched * 75,
+                      win: state.reason === 'deck' ? (state.nate ? 1500 : 500) : 0 };
+      state.score += state.bonus.untouched + state.bonus.win;
+    }
+    return { card, win, tie, sips, pts };
   }
 
   function guess(state, i, dir) {
     const pile = state.piles[i];
-    if (state.over || !pile.alive || state.deck.length === 0) return null;
-    return resolve(state, pile, dir, state.deck.pop());
+    if (state.over || !pile.alive || pile.revealed === false || state.deck.length === 0) return null;
+    if (state.werner && state.lock >= 0 && state.lock !== i) return null; // ride it till it busts
+    const p = probs(state, i)[dir];
+    const r = resolve(state, i, dir, state.deck.pop(), p);
+    if (state.werner) state.lock = pile.alive ? i : -1;
+    return r;
   }
 
   // ---- Live mode: a physical deck is the game; state.deck = cards not yet seen ----
   function newLive() {
     const piles = [];
-    for (let i = 0; i < PILES; i++) piles.push({ cards: [], alive: true });
+    for (let i = 0; i < PILES; i++) piles.push({ cards: [], alive: true, revealed: true });
     return { live: true, phase: 'setup', deck: fullDeck(), piles,
-             drinks: 0, over: false, reason: null, history: [] };
+             drinks: 0, over: false, reason: null, history: [],
+             score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
   function snap(state) {
     return JSON.parse(JSON.stringify({
       phase: state.phase, deck: state.deck, piles: state.piles,
       drinks: state.drinks, over: state.over, reason: state.reason,
+      score: state.score, streak: state.streak, bonus: state.bonus,
     }));
   }
 
@@ -519,7 +601,8 @@ const Engine = (() => {
     if (state.phase !== 'play' || state.over || !state.piles[i].alive) return null;
     if (!state.deck.some(c => c.rank === rank && c.suit === suit)) return { dup: true };
     state.history.push(snap(state));
-    return resolve(state, state.piles[i], dir, takeCard(state, rank, suit));
+    const p = probs(state, i)[dir]; // shown odds: the flipped card is still unseen
+    return resolve(state, i, dir, takeCard(state, rank, suit), p);
   }
 
   // Revert the last accepted card entirely (misread recovery).
@@ -530,7 +613,7 @@ const Engine = (() => {
     return true;
   }
 
-  return { newGame, probs, recommend, guess, winChance,
+  return { newGame, flip, probs, recommend, guess, winChance,
            newLive, liveSetup, liveResolve, liveUndo,
            label, key, fullDeck, RED, SUITS };
 })();
@@ -908,6 +991,8 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   const ASSETS = window.GAME_ASSETS || { win: '', lose: '' };
 
   let mode = 'play';                 // 'play' (virtual deck) | 'live' (camera)
+  let nate = false;                  // face-down deal, no odds, triple win bonus
+  let werner = false;                // stuck with a pile until it busts
   let vState = Engine.newGame();
   let lState = null;
   let armed = null;                  // {pile, dir} awaiting a physical card (live)
@@ -919,6 +1004,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function cardFace(pile, idx) {
     if (!pile.cards.length) return `<div class="card empty">${idx + 1}</div>`;
+    if (!pile.revealed) return `<div class="card back" data-flip="${idx}"><div class="pip">?</div></div>`;
     const top = pile.cards[pile.cards.length - 1];
     const color = Engine.RED[top.suit] ? 'red' : 'blk';
     const height = pile.cards.length >= 3 ? 'h3' : 'h' + pile.cards.length;
@@ -933,7 +1019,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   function render(fx) {
     const state = cur();
     const setup = mode === 'live' && state.phase === 'setup';
-    const rec = state.over || setup ? null : Engine.recommend(state);
+    const rec = state.over || setup || state.nate ? null : Engine.recommend(state);
     grid.innerHTML = state.piles.map((pile, i) => {
       const isRec = rec && rec.pile === i;
       const isArmed = armed && armed.pile === i;
@@ -941,13 +1027,25 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
                    isArmed ? 'armed' : '',
                    fx && fx.pile === i && fx.win ? 'won' : ''].join(' ');
       let btns = '';
-      if (!setup && pile.cards.length) {
+      const lockOut = state.werner && state.lock >= 0 && state.lock !== i;
+      if (lockOut) {
+        // Werner: you're riding another pile — no buttons here until it busts
+      } else if (!setup && pile.cards.length && pile.revealed && state.nate) {
+        // Nate mode: arrows only — odds or payouts would give the cards away
+        btns = `<div class="btns">
+          <button class="guess blind" data-i="${i}" data-dir="higher"><span class="arrow">▲</span></button>
+          <button class="guess blind" data-i="${i}" data-dir="lower"><span class="arrow">▼</span></button>
+        </div>`;
+      } else if (!setup && pile.cards.length && pile.revealed) {
         const p = Engine.probs(state, i);
+        // potential payout preview: odds × height-after-win × live streak bonus
+        const sn = state.streak && state.streak.pile === i ? state.streak.n : 0;
+        const pot = (prob) => Math.round(100 * (1 - prob) * (pile.cards.length + 1) * (1 + 0.5 * sn));
         btns = `<div class="btns">
           <button class="guess ${isArmed && armed.dir === 'higher' ? 'armed' : isRec && !armed && rec.dir === 'higher' ? 'best' : ''}" data-i="${i}" data-dir="higher">
-            <span class="arrow">▲</span>${pct(p.higher)}</button>
+            <span class="arrow">▲</span>${pct(p.higher)}<span class="pts">+${pot(p.higher)}</span></button>
           <button class="guess ${isArmed && armed.dir === 'lower' ? 'armed' : isRec && !armed && rec.dir === 'lower' ? 'best' : ''}" data-i="${i}" data-dir="lower">
-            <span class="arrow">▼</span>${pct(p.lower)}</button>
+            <span class="arrow">▼</span>${pct(p.lower)}<span class="pts">+${pot(p.lower)}</span></button>
         </div>`;
       }
       return `<div class="${cls}" data-i="${i}">${cardFace(pile, i)}${btns}</div>`;
@@ -970,11 +1068,15 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const wc = $('#winChance');
     if (setup) {
       wc.textContent = '';
+    } else if (state.nate && !state.over) {
+      wc.textContent = 'win ?%'; // the estimate would leak what's face down
+      wc.className = 'mid';
     } else {
       const p = Engine.winChance(state);
       wc.textContent = `win ${Math.round(p * 100)}%`;
       wc.className = p >= 0.5 ? 'good' : p >= 0.25 ? 'mid' : 'bad';
     }
+    $('#scoreChip').textContent = setup ? '' : `${state.score} pts`;
     $('#cam').classList.toggle('compact', mode === 'live' && state.phase === 'play');
     renderLiveStatus();
   }
@@ -1025,7 +1127,10 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#goCap').textContent = 'Chillin';
     $('#goCap').hidden = !win;
     $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
+    const b = state.bonus || { untouched: 0, win: 0 };
+    const bonusTxt = (b.untouched ? ` (+${b.untouched} untouched)` : '') + (b.win ? ` (+${b.win} clear)` : '');
     $('#gameover .sub').innerHTML =
+      `Score: <b>${state.score}</b>${bonusTxt}<br>` +
       `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>Session total: <b>${sessionDrinks}</b>`;
     $('#gameover').classList.add('show');
   }
@@ -1055,11 +1160,38 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function reset() {
     if (mode === 'live') { lState = Engine.newLive(); armed = null; gate.frames = []; }
-    else vState = Engine.newGame();
+    else vState = Engine.newGame(null, nate, werner);
     $('#gameover').classList.remove('show');
     toast.classList.remove('show');
     locked = false;
     render();
+  }
+
+  function updateRules() {
+    if (mode === 'live') {
+      $('#rules').textContent = 'real deck · scan flips · undo fixes misreads · works best flat to the camera, torch on at night';
+      return;
+    }
+    const bits = [nate
+      ? '😎 face-down deal · tap a pile to flip it · no odds, no hints · clear the deck for +1500'
+      : '▲/▼ on any live pile · wrong = drink the pile & it dies · tie = drink, pile lives · Ace high'];
+    if (werner) bits.push('🤪 stuck with your pile till it busts');
+    $('#rules').textContent = bits.join(' · ');
+  }
+
+  function toggleVariant(which) {
+    if (which === 'nate') nate = !nate;
+    else werner = !werner;
+    $('#nateBtn').classList.toggle('on', nate);
+    $('#wernerBtn').classList.toggle('on', werner);
+    if (mode === 'live') { setMode('play'); } // variants are virtual-deck games
+    reset(); // switching always deals a fresh game
+    updateRules();
+  }
+
+  function onFlip(i) {
+    if (locked || mode !== 'play') return;
+    if (Engine.flip(vState, i)) render();
   }
 
   // ---- Live mode: camera + acceptance gate ----
@@ -1209,9 +1341,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#cam').classList.toggle('show', live);
     $('#modeBtn').classList.toggle('live', live);
     $('#modeBtn').textContent = live ? '🎴 Play' : '📷 Live';
-    $('#rules').textContent = live
-      ? 'real deck · scan flips · undo fixes misreads · works best flat to the camera, torch on at night'
-      : '▲/▼ on any live pile · wrong = drink the pile & it dies · tie = drink, pile lives · Ace high';
+    updateRules();
     $('#gameover').classList.remove('show');
     if (live) {
       if (!lState) lState = Engine.newLive();
@@ -1223,10 +1353,14 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   }
 
   grid.addEventListener('click', (e) => {
+    const back = e.target.closest('.card.back');
+    if (back) { onFlip(+back.dataset.flip); return; }
     const btn = e.target.closest('.guess');
     if (btn) onGuess(+btn.dataset.i, btn.dataset.dir);
   });
   $('#newgame').addEventListener('click', reset);
+  $('#nateBtn').addEventListener('click', () => toggleVariant('nate'));
+  $('#wernerBtn').addEventListener('click', () => toggleVariant('werner'));
   $('#again').addEventListener('click', reset);
   $('#undoBtn').addEventListener('click', undo);
   $('#modeBtn').addEventListener('click', () => setMode(mode === 'live' ? 'play' : 'live'));

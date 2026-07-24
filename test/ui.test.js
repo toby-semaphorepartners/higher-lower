@@ -22,9 +22,11 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if ((await page.textContent('#deckCount')) !== '43') fail('deck badge should read 43');
   if ((await page.locator('.pile.rec').count()) !== 1) fail('exactly one recommended pile');
   if ((await page.locator('.guess.best').count()) !== 1) fail('exactly one best button');
-  // every live pile shows both percentages
+  // every live pile shows both percentages plus a potential payout
   const pcts = await page.locator('.guess').allTextContents();
-  if (!pcts.every(t => /%$/.test(t.trim()))) fail('all buttons show a percentage');
+  if (!pcts.every(t => /%\+\d+$/.test(t.trim()))) fail('all buttons show odds and payout');
+  // score chip starts at zero in the progress bar corner
+  if ((await page.textContent('#scoreChip')) !== '0 pts') fail('score chip should start at 0 pts');
   // tap targets big enough
   const small = await page.$$eval('.guess', els => els.filter(el => el.getBoundingClientRect().height < 44).length);
   if (small > 0) fail(`${small} guess buttons under 44px tall`);
@@ -114,6 +116,10 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if (!(await page.locator('#gameover.show').count())) fail('game-over overlay not shown');
   const wcEnd = await page.textContent('#winChance');
   if (!/^win (100|0)%$/.test(wcEnd)) fail('terminal win chance should be 0/100: ' + wcEnd);
+  const goSub = await page.textContent('#gameover .sub');
+  if (!/Score: \d+/.test(goSub)) fail('game over should show the final score: ' + goSub);
+  const scoreEnd = await page.textContent('#scoreChip');
+  if (!/^\d+ pts$/.test(scoreEnd)) fail('score chip should show a number: ' + scoreEnd);
   await page.screenshot({ path: SCRATCH + '/shot-5-gameover.png' });
 
   // new game resets board but keeps session drinks
@@ -124,6 +130,54 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if ((await page.locator('.pile.dead').count()) !== 0) fail('new game should have no dead piles');
   if ((await page.textContent('#drinkCount')) !== sessionBefore) fail('session drink counter must survive new game');
   await page.screenshot({ path: SCRATCH + '/shot-6-newgame.png' });
+
+  // Nate mode: face-down deal, flip to play, everything leaky hidden
+  await page.locator('#nateBtn').click();
+  await page.waitForTimeout(200);
+  if ((await page.locator('.card.back').count()) !== 9) fail('nate: expected 9 face-down piles');
+  if ((await page.locator('.guess').count()) !== 0) fail('nate: no guess buttons before a flip');
+  if ((await page.locator('.pile.rec').count()) !== 0) fail('nate: no gold recommendation');
+  if ((await page.textContent('#winChance')) !== 'win ?%') fail('nate: win chance must be hidden');
+  if ((await page.textContent('#deckCount')) !== '43') fail('nate toggle should deal a fresh game');
+  await page.locator('.card.back[data-flip="4"]').click();
+  await page.waitForTimeout(200);
+  if ((await page.locator('.card.back').count()) !== 8) fail('nate: tap should flip the pile');
+  const nbtns = await page.locator('.guess').allTextContents();
+  if (nbtns.length !== 2 || nbtns.some(t => /%/.test(t))) fail('nate: revealed pile plays blind (no odds)');
+  await page.screenshot({ path: SCRATCH + '/shot-7-nate.png' });
+  await page.locator('.guess[data-i="4"][data-dir="higher"]').click();
+  await page.waitForTimeout(150);
+  if ((await page.textContent('#deckCount')) !== '42') fail('nate: blind guess should consume a card');
+  await page.waitForTimeout(1500); // let a possible drink toast clear
+  // toggling back restarts a normal face-up game
+  await page.locator('#nateBtn').click();
+  await page.waitForTimeout(200);
+  if ((await page.locator('.card.back').count()) !== 0) fail('nate off: face-up deal');
+  if ((await page.textContent('#deckCount')) !== '43') fail('nate off: fresh game');
+  if ((await page.locator('.guess.best').count()) !== 1) fail('nate off: recommendation returns');
+
+  // Wacky Werner: guessing a pile locks you to it until it busts
+  await page.locator('#wernerBtn').click();
+  await page.waitForTimeout(200);
+  if ((await page.textContent('#deckCount')) !== '43') fail('werner toggle should deal a fresh game');
+  if ((await page.locator('.guess').count()) !== 18) fail('werner: all piles playable before the first guess');
+  const wst = await page.evaluate(() => {
+    window.__game.onGuess(0, 'higher');
+    return { lock: window.__game.state.lock, alive: window.__game.state.piles[0].alive };
+  });
+  await page.waitForTimeout(250);
+  if (wst.alive) {
+    if (wst.lock !== 0) fail('werner: surviving pile should hold the lock');
+    if ((await page.locator('.guess').count()) !== 2) fail('werner: only the locked pile keeps buttons');
+    if ((await page.locator('.guess[data-i="0"]').count()) !== 2) fail('werner: the locked pile is the playable one');
+  } else if (wst.lock !== -1) {
+    fail('werner: a bust should release the lock');
+  }
+  await page.screenshot({ path: SCRATCH + '/shot-8-werner.png' });
+  await page.waitForTimeout(1500); // let a possible drink toast clear
+  await page.locator('#wernerBtn').click(); // back to normal
+  await page.waitForTimeout(200);
+  if ((await page.locator('.guess').count()) !== 18) fail('werner off: free pile choice returns');
 
   if (errors.length) fail('console errors: ' + errors.join(' | '));
   console.log(process.exitCode ? 'UI TESTS FAILED' : 'all UI checks passed');

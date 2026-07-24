@@ -158,7 +158,99 @@ const pLive = Engine.probs(lv, 0); // top A♠, ace high: nothing higher
 assert(pLive.higher === 0 && Math.abs(pLive.lower - 40 / 43) < 1e-12, 'live probs exact (A top: 0 higher, 40/43 lower)');
 assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
 
-// 9. winChance: Monte Carlo estimate of winning from the current position
+// 9. scoring: odds-paid wins, streak bonus, untouched + clear-deck bonuses
+{
+  let lv = Engine.newLive();
+  assert(lv.score === 0 && lv.streak.n === 0, 'live game starts scoreless');
+  const setup10 = [[14, '♠'], [2, '♥'], [7, '♦'], [7, '♣'], [11, '♠'], [12, '♥'], [13, '♦'], [3, '♣'], [9, '♠']];
+  setup10.forEach(([r, s]) => Engine.liveSetup(lv, r, s));
+  assert(lv.score === 0, 'setup earns nothing');
+  // win on pile 1 (top 2♥) with 10♠: p = 40/43, height 2, no streak yet
+  let p = Engine.probs(lv, 1).higher;
+  let r = Engine.liveResolve(lv, 1, 'higher', 10, '♠');
+  assert(r.win && r.pts === Math.round(100 * (1 - p) * 2), 'win pays odds × height');
+  assert(r.pts === 14, 'sanity: 40/43 favorite on a fresh pile pays 14');
+  assert(lv.score === 14, 'score accumulates');
+  // consecutive win on the same pile: height 3, ×1.5 streak
+  p = Engine.probs(lv, 1).higher;
+  r = Engine.liveResolve(lv, 1, 'higher', 13, '♥');
+  assert(r.pts === Math.round(100 * (1 - p) * 3 * 1.5), 'streak: +50% on second consecutive win');
+  const s2 = lv.score;
+  // switching piles resets the streak multiplier
+  p = Engine.probs(lv, 4).higher; // pile 4 top J♠
+  r = Engine.liveResolve(lv, 4, 'higher', 14, '♥');
+  assert(r.pts === Math.round(100 * (1 - p) * 2), 'streak resets on a new pile');
+  assert(lv.score === s2 + r.pts, 'score adds up');
+  // a loss scores nothing and kills the streak
+  r = Engine.liveResolve(lv, 4, 'higher', 4, '♦'); // top is now A♥: nothing is higher
+  assert(!r.win && r.pts === 0 && lv.streak.n === 0, 'loss: no points, streak dead');
+  // undo rolls the score back too
+  Engine.liveUndo(lv); Engine.liveUndo(lv);
+  assert(lv.score === s2, 'undo restores the score');
+  // guaranteed win pays zero; end-of-game bonuses land on top
+  const st = { deck: [{ rank: 14, suit: '♠' }],
+    piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true })),
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null };
+  const rr = Engine.guess(st, 0, 'higher'); // p = 1: the sure thing pays nothing
+  assert(rr.win && rr.pts === 0, 'sure thing pays 0');
+  assert(st.over && st.reason === 'deck', 'deck exhausted ends the game');
+  assert(st.bonus.untouched === 8 * 75 && st.bonus.win === 500, 'end bonuses: 8 untouched piles + clear');
+  assert(st.score === 1100, 'final score = bonuses only');
+}
+
+// 10. Nate mode: face-down deal, flip to play, tripled win bonus
+{
+  const st = Engine.newGame(makeRng(5), true);
+  assert(st.nate === true && st.piles.every(p => p.revealed === false), 'nate deal: all face down');
+  assert(Engine.guess(st, 0, 'higher') === null, 'cannot guess a face-down pile');
+  assert(st.deck.length === 43, 'blocked guess consumes nothing');
+  assert(Engine.recommend(st) === null, 'nothing to recommend while all face down');
+  assert(Engine.flip(st, 0) === true && st.piles[0].revealed, 'flip reveals a pile');
+  assert(Engine.flip(st, 0) === false, 'no double flip');
+  assert(Engine.recommend(st).pile === 0, 'recommend only sees revealed piles');
+  assert(Engine.guess(st, 0, 'higher') !== null, 'guess works after the flip');
+  const n = Engine.newGame(makeRng(5));
+  assert(!n.nate && n.piles.every(p => p.revealed), 'normal deal stays face up');
+  // clearing the deck blind pays the tripled bonus
+  const tiny = { deck: [{ rank: 14, suit: '♠' }], nate: true,
+    piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true, revealed: true })),
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null };
+  Engine.guess(tiny, 0, 'higher');
+  assert(tiny.over && tiny.bonus.win === 1500, 'nate victory bonus is 1500');
+}
+
+// 11. Wacky Werner: once you guess a pile you're stuck with it until it busts
+{
+  const mkW = (deckRanks) => ({
+    deck: deckRanks.map(r => ({ rank: r, suit: '♠' })), werner: true, lock: -1,
+    piles: [{ cards: [{ rank: 7, suit: '♥' }], alive: true, revealed: true },
+            { cards: [{ rank: 7, suit: '♦' }], alive: true, revealed: true }],
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
+  });
+  const fresh = Engine.newGame(makeRng(21), false, true);
+  assert(fresh.werner === true && fresh.lock === -1, 'werner deal starts unlocked');
+  let w = mkW([5, 2, 14]); // draws come off the end: 14, then 2, then 5
+  let r = Engine.guess(w, 0, 'higher'); // 14 > 7 wins
+  assert(r.win && w.lock === 0, 'winning locks you to the pile');
+  assert(Engine.guess(w, 1, 'higher') === null, 'other piles rejected while locked');
+  assert(Engine.recommend(w).pile === 0, 'recommend honors the lock');
+  r = Engine.guess(w, 0, 'higher'); // 2 < 14 busts the pile
+  assert(!r.win && !r.tie && w.lock === -1, 'bust releases the lock');
+  assert(Engine.guess(w, 1, 'lower') !== null, 'free to pick a new pile after the bust');
+  // a tie keeps the pile alive, so it keeps the lock too
+  w = mkW([7]);
+  Engine.guess(w, 1, 'higher'); // 7 = 7 tie
+  assert(w.piles[1].alive && w.lock === 1, 'tie keeps the lock');
+  // werner-aware win estimate still behaves
+  const wc = Engine.winChance(Engine.newGame(makeRng(2), false, true));
+  assert(wc > 0.02 && wc < 0.7, `werner win estimate plausible (got ${wc})`);
+  // normal games can still switch piles freely
+  const nrm = Engine.newGame(makeRng(3));
+  Engine.guess(nrm, 0, 'higher');
+  assert(Engine.guess(nrm, 1, 'higher') !== null, 'normal mode switches piles');
+}
+
+// 12. winChance: Monte Carlo estimate of winning from the current position
 {
   const mk = (tops, deckRanks) => ({
     deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),
