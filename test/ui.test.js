@@ -31,6 +31,11 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   // progress bar: fresh game = 43 left, 0% done
   const lbl0 = await page.textContent('#progressLbl');
   if (!/43 cards left · 0% to victory/.test(lbl0)) fail('initial progress label wrong: ' + lbl0);
+  // win-chance chip: a plausible fresh-game estimate in the progress corner
+  const wc0 = await page.textContent('#winChance');
+  if (!/^win \d+%$/.test(wc0)) fail('win chance chip missing: "' + wc0 + '"');
+  const wcv = parseInt(wc0.match(/\d+/)[0], 10);
+  if (!(wcv >= 20 && wcv <= 70)) fail('fresh-game win chance implausible: ' + wc0);
   await page.screenshot({ path: SCRATCH + '/shot-1-initial.png' });
 
   // take the recommended guess (should usually win; either way state advances)
@@ -107,6 +112,8 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   }
   await page.waitForTimeout(1300);
   if (!(await page.locator('#gameover.show').count())) fail('game-over overlay not shown');
+  const wcEnd = await page.textContent('#winChance');
+  if (!/^win (100|0)%$/.test(wcEnd)) fail('terminal win chance should be 0/100: ' + wcEnd);
   await page.screenshot({ path: SCRATCH + '/shot-5-gameover.png' });
 
   // new game resets board but keeps session drinks
