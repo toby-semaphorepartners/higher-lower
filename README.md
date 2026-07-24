@@ -11,6 +11,9 @@ Open `index.html` in any browser. That's the whole install.
 For phone use, host the file anywhere HTTPS (camera access requires a secure
 context) — or just open it locally for the on-screen game.
 
+🔊 (bottom-right) toggles sound and vibration — every effect is synthesized
+in-page, no audio files.
+
 ## Rules
 
 - 9 piles dealt face-up in a 3×3 grid. Tap ▲ or ▼ on any live pile to guess

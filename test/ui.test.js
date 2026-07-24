@@ -188,6 +188,17 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   await page.waitForTimeout(200);
   if ((await page.locator('.guess').count()) !== 18) fail('werner off: free pile choice returns');
 
+  // Sound: mute toggle exists and persists
+  const mLbl = await page.textContent('#muteBtn');
+  if (!/🔊|🔇/.test(mLbl)) fail('mute button missing: ' + mLbl);
+  await page.locator('#muteBtn').click();
+  const mutedStored = await page.evaluate(() => {
+    try { return localStorage.getItem('hl.muted'); } catch (_) { return 'blocked'; }
+  });
+  if (mutedStored !== '1' && mutedStored !== 'blocked') fail('mute state should persist: ' + mutedStored);
+  if ((await page.textContent('#muteBtn')) !== '🔇') fail('mute button should show muted state');
+  await page.locator('#muteBtn').click(); // back on
+
   // Multiplayer: editor, turn strip, named toast, leaderboard
   await page.locator('#drinkStat').click();
   if (!(await page.locator('#playersOv.show').count())) fail('players editor should open from the 🍺 chip');

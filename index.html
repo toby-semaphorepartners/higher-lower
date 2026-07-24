@@ -329,10 +329,20 @@
 
   /* ---- footer rules line ---- */
   footer {
-    padding: 4px 4px 8px;
+    padding: 4px 48px 8px;
     font-size: 13px; font-weight: 700; color: #9aa4b6;
     text-align: center;
   }
+  #muteBtn {
+    position: fixed; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 8px);
+    z-index: 10;
+    width: 42px; height: 42px;
+    font-size: 18px;
+    background: rgba(22, 27, 36, .9); border: 1px solid #303a4a; border-radius: 50%;
+    color: #f2f4f8; cursor: pointer;
+  }
+  #muteBtn.muted { opacity: .5; }
+  #muteBtn:active { transform: scale(.94); }
 
   /* ---- drink toast ---- */
   #toast {
@@ -426,6 +436,8 @@
   <main id="grid"></main>
   <footer id="rules">▲/▼ on any live pile · wrong = drink the pile &amp; it dies · tie = drink, pile lives · Ace high</footer>
 </div>
+
+<button id="muteBtn" title="Sound &amp; vibration">🔊</button>
 
 <div id="readFlash"></div>
 <div id="toast"><img id="toastImg" alt="" hidden><div class="big"></div><div class="sub"></div></div>
@@ -1080,6 +1092,64 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   let sessionDrinks = {};            // per-name; survives New game, dies with the tab
   let locked = false;                // swallow taps while the drink toast is up
 
+  // ---- sound & haptics: everything synthesized, no audio assets ----
+  const Sfx = (() => {
+    let ctx = null, muted = false;
+    try { muted = localStorage.getItem('hl.muted') === '1'; } catch (_) {}
+    function ac() { // lazily created inside user-gesture call stacks (autoplay rules)
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+      }
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    }
+    function tone(freq, t0, dur, type, gain) {
+      const c = ac();
+      if (!c) return;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      const at = c.currentTime + t0;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(gain, at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      o.connect(g).connect(c.destination);
+      o.start(at); o.stop(at + dur + 0.05);
+    }
+    const buzz = (p) => { if (navigator.vibrate) try { navigator.vibrate(p); } catch (_) {} };
+    return {
+      get muted() { return muted; },
+      toggle() {
+        muted = !muted;
+        try { localStorage.setItem('hl.muted', muted ? '1' : '0'); } catch (_) {}
+        return muted;
+      },
+      win(streak) { // ding that climbs with the streak
+        if (!muted) {
+          const f = 660 * Math.pow(1.12, Math.min(streak || 1, 8) - 1);
+          tone(f, 0, 0.12, 'triangle', 0.15);
+          tone(f * 1.5, 0.07, 0.15, 'triangle', 0.12);
+        }
+        buzz(30);
+      },
+      bust() {
+        if (!muted) { tone(220, 0, 0.25, 'sawtooth', 0.2); tone(150, 0.12, 0.35, 'sawtooth', 0.2); }
+        buzz([400]);
+      },
+      tie() {
+        if (!muted) { tone(330, 0, 0.12, 'square', 0.12); tone(330, 0.16, 0.12, 'square', 0.12); }
+        buzz([80, 60, 80]);
+      },
+      fanfare() {
+        if (!muted) [523, 659, 784, 1047].forEach((f, k) => tone(f, k * 0.12, 0.22, 'triangle', 0.16));
+        buzz([60, 40, 60, 40, 120]);
+      },
+      flip() { if (!muted) tone(880, 0, 0.05, 'square', 0.06); },
+    };
+  })();
+
   const cur = () => (mode === 'live' ? lState : vState);
   const pct = (p) => Math.round(p * 100) + '%';
   const esc = (s) => String(s).replace(/[&<>"']/g,
@@ -1219,6 +1289,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const state = cur();
     if (!state.over) return;
     const win = state.reason === 'deck';
+    if (win && !$('#gameover').classList.contains('show')) Sfx.fanfare();
     $('#goImg').src = win ? ASSETS.win : ASSETS.lose;
     $('#goImg').hidden = !(win ? ASSETS.win : ASSETS.lose);
     $('#goCap').textContent = 'Chillin';
@@ -1247,6 +1318,9 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const state = cur();
     const actor = state.players[result.player];
     if (!result.win) sessionDrinks[actor.name] = (sessionDrinks[actor.name] || 0) + 1;
+    if (result.win) Sfx.win(state.streak.n);
+    else if (result.tie) Sfx.tie();
+    else Sfx.bust();
     render(result.win ? { pile: i, win: true } : null);
     if (result.win) {
       setTimeout(() => { render(); maybeGameOver(); }, 450);
@@ -1301,7 +1375,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function onFlip(i) {
     if (locked || mode !== 'play') return;
-    if (Engine.flip(vState, i)) render();
+    if (Engine.flip(vState, i)) { Sfx.flip(); render(); }
   }
 
   // ---- players editor (pass-and-play) ----
@@ -1341,6 +1415,13 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   $('#editPlayers').addEventListener('click', openPlayers);
   $('#turnStrip').addEventListener('click', openPlayers);
   $('#drinkStat').addEventListener('click', openPlayers);
+
+  function paintMute() {
+    $('#muteBtn').textContent = Sfx.muted ? '🔇' : '🔊';
+    $('#muteBtn').classList.toggle('muted', Sfx.muted);
+  }
+  $('#muteBtn').addEventListener('click', () => { Sfx.toggle(); paintMute(); });
+  paintMute();
 
   // ---- Live mode: camera + acceptance gate ----
   const video = $('#camVideo');
