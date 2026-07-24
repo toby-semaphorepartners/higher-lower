@@ -33,6 +33,13 @@ any of those would give the cards away. Flip more piles whenever you like;
 face-down piles can't be guessed on. Clearing the deck blind pays a tripled
 **+1500** victory bonus. Tapping 😎 (either way) always deals a fresh game.
 
+## 🤪 Wacky Werner
+
+Tap 🤪 and the moment you guess on a pile you're stuck with it — ▲/▼ vanish
+everywhere else — until it busts. Then pick your next victim. The win estimate
+knows the rule and prices your chances accordingly. Stacks with Nate mode for
+the full blindfolded-and-handcuffed experience. Toggling deals a fresh game.
+
 ## Scoring
 
 Risk pays. A winning guess earns **100 × (1 − its shown odds)** — a coin flip pays

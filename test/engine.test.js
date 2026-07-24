@@ -219,7 +219,38 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
   assert(tiny.over && tiny.bonus.win === 1500, 'nate victory bonus is 1500');
 }
 
-// 11. winChance: Monte Carlo estimate of winning from the current position
+// 11. Wacky Werner: once you guess a pile you're stuck with it until it busts
+{
+  const mkW = (deckRanks) => ({
+    deck: deckRanks.map(r => ({ rank: r, suit: '♠' })), werner: true, lock: -1,
+    piles: [{ cards: [{ rank: 7, suit: '♥' }], alive: true, revealed: true },
+            { cards: [{ rank: 7, suit: '♦' }], alive: true, revealed: true }],
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
+  });
+  const fresh = Engine.newGame(makeRng(21), false, true);
+  assert(fresh.werner === true && fresh.lock === -1, 'werner deal starts unlocked');
+  let w = mkW([5, 2, 14]); // draws come off the end: 14, then 2, then 5
+  let r = Engine.guess(w, 0, 'higher'); // 14 > 7 wins
+  assert(r.win && w.lock === 0, 'winning locks you to the pile');
+  assert(Engine.guess(w, 1, 'higher') === null, 'other piles rejected while locked');
+  assert(Engine.recommend(w).pile === 0, 'recommend honors the lock');
+  r = Engine.guess(w, 0, 'higher'); // 2 < 14 busts the pile
+  assert(!r.win && !r.tie && w.lock === -1, 'bust releases the lock');
+  assert(Engine.guess(w, 1, 'lower') !== null, 'free to pick a new pile after the bust');
+  // a tie keeps the pile alive, so it keeps the lock too
+  w = mkW([7]);
+  Engine.guess(w, 1, 'higher'); // 7 = 7 tie
+  assert(w.piles[1].alive && w.lock === 1, 'tie keeps the lock');
+  // werner-aware win estimate still behaves
+  const wc = Engine.winChance(Engine.newGame(makeRng(2), false, true));
+  assert(wc > 0.02 && wc < 0.7, `werner win estimate plausible (got ${wc})`);
+  // normal games can still switch piles freely
+  const nrm = Engine.newGame(makeRng(3));
+  Engine.guess(nrm, 0, 'higher');
+  assert(Engine.guess(nrm, 1, 'higher') !== null, 'normal mode switches piles');
+}
+
+// 12. winChance: Monte Carlo estimate of winning from the current position
 {
   const mk = (tops, deckRanks) => ({
     deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),

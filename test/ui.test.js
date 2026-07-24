@@ -156,6 +156,29 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if ((await page.textContent('#deckCount')) !== '43') fail('nate off: fresh game');
   if ((await page.locator('.guess.best').count()) !== 1) fail('nate off: recommendation returns');
 
+  // Wacky Werner: guessing a pile locks you to it until it busts
+  await page.locator('#wernerBtn').click();
+  await page.waitForTimeout(200);
+  if ((await page.textContent('#deckCount')) !== '43') fail('werner toggle should deal a fresh game');
+  if ((await page.locator('.guess').count()) !== 18) fail('werner: all piles playable before the first guess');
+  const wst = await page.evaluate(() => {
+    window.__game.onGuess(0, 'higher');
+    return { lock: window.__game.state.lock, alive: window.__game.state.piles[0].alive };
+  });
+  await page.waitForTimeout(250);
+  if (wst.alive) {
+    if (wst.lock !== 0) fail('werner: surviving pile should hold the lock');
+    if ((await page.locator('.guess').count()) !== 2) fail('werner: only the locked pile keeps buttons');
+    if ((await page.locator('.guess[data-i="0"]').count()) !== 2) fail('werner: the locked pile is the playable one');
+  } else if (wst.lock !== -1) {
+    fail('werner: a bust should release the lock');
+  }
+  await page.screenshot({ path: SCRATCH + '/shot-8-werner.png' });
+  await page.waitForTimeout(1500); // let a possible drink toast clear
+  await page.locator('#wernerBtn').click(); // back to normal
+  await page.waitForTimeout(200);
+  if ((await page.locator('.guess').count()) !== 18) fail('werner off: free pile choice returns');
+
   if (errors.length) fail('console errors: ' + errors.join(' | '));
   console.log(process.exitCode ? 'UI TESTS FAILED' : 'all UI checks passed');
   await browser.close();

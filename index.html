@@ -42,7 +42,7 @@
     min-height: 48px;
   }
   .stat .lbl { font-size: 13px; font-weight: 700; color: #9aa4b6; text-transform: uppercase; letter-spacing: .06em; }
-  #modeBtn, #nateBtn {
+  #modeBtn, #nateBtn, #wernerBtn {
     min-height: 48px; padding: 8px 9px;
     font: inherit; font-size: 16px; font-weight: 800; color: #f2f4f8;
     background: #161b24; border: 1px solid #29303d; border-radius: 14px;
@@ -50,9 +50,13 @@
     white-space: nowrap;
   }
   #modeBtn.live { background: #103042; border-color: #2196c9; color: #7fd6ff; }
-  #nateBtn { min-width: 46px; }
-  #nateBtn.on { background: #3a2c0e; border-color: #ffc53d; }
-  #nateBtn:active { transform: scale(.96); }
+  #nateBtn, #wernerBtn { min-width: 44px; padding: 8px 6px; }
+  #nateBtn.on, #wernerBtn.on { background: #3a2c0e; border-color: #ffc53d; }
+  #nateBtn:active, #wernerBtn:active { transform: scale(.96); }
+  @media (max-width: 460px) {
+    .stat .lbl { display: none; } /* keep all six header controls tappable */
+    #modeBtn { font-size: 15px; }
+  }
   #newgame {
     margin-left: auto;
     min-height: 48px; padding: 8px 12px;
@@ -349,6 +353,7 @@
     <div class="stat">🍺<span id="drinkCount">0</span></div>
     <button id="modeBtn" title="Toggle camera Live mode">📷 Live</button>
     <button id="nateBtn" title="Nate mode: face-down deal, flip to play, triple win bonus">😎</button>
+    <button id="wernerBtn" title="Wacky Werner: once you guess a pile you're stuck with it until it busts">🤪</button>
     <button id="newgame">New</button>
   </header>
   <div id="progress"><div id="progressFill"></div><span id="progressLbl"></span><span id="scoreChip"></span><span id="winChance"></span></div>
@@ -398,7 +403,9 @@ const Engine = (() => {
 
   // nate=true deals every pile face-down: it must be flipped before it can be
   // played, and nothing about its card is shown until then.
-  function newGame(rng, nate) {
+  // werner=true is Wacky Werner: once you guess on a pile you're locked to it
+  // until it busts (state.lock is the pile you're riding, -1 = free choice).
+  function newGame(rng, nate, werner) {
     rng = rng || Math.random;
     const deck = fullDeck();
     for (let i = deck.length - 1; i > 0; i--) {
@@ -407,7 +414,8 @@ const Engine = (() => {
     }
     const piles = [];
     for (let i = 0; i < PILES; i++) piles.push({ cards: [deck.pop()], alive: true, revealed: !nate });
-    return { deck, piles, drinks: 0, over: false, reason: null, nate: !!nate,
+    return { deck, piles, drinks: 0, over: false, reason: null,
+             nate: !!nate, werner: !!werner, lock: -1,
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -443,9 +451,12 @@ const Engine = (() => {
     const counts = new Uint8Array(15);
     for (const c of state.deck) counts[c.rank]++;
     const tops0 = [];
-    for (const p of state.piles) {
-      if (p.alive && p.cards.length) tops0.push(p.cards[p.cards.length - 1].rank);
-    }
+    let lock0 = -1; // Werner: index into tops0 of the pile being ridden
+    state.piles.forEach((p, i) => {
+      if (!(p.alive && p.cards.length)) return;
+      if (state.werner && state.lock === i) lock0 = tops0.length;
+      tops0.push(p.cards[p.cards.length - 1].rank);
+    });
     if (!tops0.length || !state.deck.length) return 0;
     if (!rng) {
       let h = 2166136261 ^ state.deck.length;
@@ -459,22 +470,30 @@ const Engine = (() => {
     for (let k = 0; k < n; k++) {
       const cnt = counts.slice();
       const tops = tops0.slice();
-      let left = state.deck.length, alive = tops.length;
+      let left = state.deck.length, alive = tops.length, lock = lock0;
       while (left > 0 && alive > 0) {
         for (let r = 2; r <= 14; r++) below[r + 1] = below[r] + cnt[r];
         let bi = 0, bw = -1, bdir = 1;
-        for (let i = 0; i < alive; i++) {
-          const t = tops[i];
-          const lo = below[t], hi = left - below[t + 1];
-          const w = hi >= lo ? hi : lo;
-          if (w > bw) { bw = w; bi = i; bdir = hi >= lo ? 1 : -1; }
+        if (lock >= 0) { // Werner: the ridden pile is the only legal play
+          bi = lock;
+          const t = tops[bi];
+          bdir = left - below[t + 1] >= below[t] ? 1 : -1;
+        } else {
+          for (let i = 0; i < alive; i++) {
+            const t = tops[i];
+            const lo = below[t], hi = left - below[t + 1];
+            const w = hi >= lo ? hi : lo;
+            if (w > bw) { bw = w; bi = i; bdir = hi >= lo ? 1 : -1; }
+          }
         }
         let pick = (rng() * left) | 0, r = 1;
         do { r++; pick -= cnt[r]; } while (pick >= 0);
         cnt[r]--; left--;
         const t = tops[bi];
-        if (r === t || (bdir > 0 ? r > t : r < t)) tops[bi] = r; // win/tie: new top
-        else { alive--; tops[bi] = tops[alive]; }                // bust: drop pile
+        if (r === t || (bdir > 0 ? r > t : r < t)) { // win/tie: new top
+          tops[bi] = r;
+          if (state.werner) lock = bi;
+        } else { alive--; tops[bi] = tops[alive]; lock = -1; } // bust: drop pile
       }
       if (left === 0) wins++;
     }
@@ -482,11 +501,13 @@ const Engine = (() => {
   }
 
   // Best (pile, direction) across live piles; null when none playable.
-  // Face-down piles are excluded — there is nothing to recommend about them.
+  // Face-down piles are excluded — there is nothing to recommend about them —
+  // and a Werner lock narrows the choice to the pile you're riding.
   function recommend(state) {
     let best = null;
     state.piles.forEach((pile, i) => {
       if (!pile.alive || pile.revealed === false) return;
+      if (state.werner && state.lock >= 0 && state.lock !== i) return;
       const p = probs(state, i);
       const dir = p.higher >= p.lower ? 'higher' : 'lower';
       const win = Math.max(p.higher, p.lower);
@@ -534,8 +555,11 @@ const Engine = (() => {
   function guess(state, i, dir) {
     const pile = state.piles[i];
     if (state.over || !pile.alive || pile.revealed === false || state.deck.length === 0) return null;
+    if (state.werner && state.lock >= 0 && state.lock !== i) return null; // ride it till it busts
     const p = probs(state, i)[dir];
-    return resolve(state, i, dir, state.deck.pop(), p);
+    const r = resolve(state, i, dir, state.deck.pop(), p);
+    if (state.werner) state.lock = pile.alive ? i : -1;
+    return r;
   }
 
   // ---- Live mode: a physical deck is the game; state.deck = cards not yet seen ----
@@ -968,6 +992,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   let mode = 'play';                 // 'play' (virtual deck) | 'live' (camera)
   let nate = false;                  // face-down deal, no odds, triple win bonus
+  let werner = false;                // stuck with a pile until it busts
   let vState = Engine.newGame();
   let lState = null;
   let armed = null;                  // {pile, dir} awaiting a physical card (live)
@@ -1002,7 +1027,10 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
                    isArmed ? 'armed' : '',
                    fx && fx.pile === i && fx.win ? 'won' : ''].join(' ');
       let btns = '';
-      if (!setup && pile.cards.length && pile.revealed && state.nate) {
+      const lockOut = state.werner && state.lock >= 0 && state.lock !== i;
+      if (lockOut) {
+        // Werner: you're riding another pile — no buttons here until it busts
+      } else if (!setup && pile.cards.length && pile.revealed && state.nate) {
         // Nate mode: arrows only — odds or payouts would give the cards away
         btns = `<div class="btns">
           <button class="guess blind" data-i="${i}" data-dir="higher"><span class="arrow">▲</span></button>
@@ -1132,7 +1160,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function reset() {
     if (mode === 'live') { lState = Engine.newLive(); armed = null; gate.frames = []; }
-    else vState = Engine.newGame(null, nate);
+    else vState = Engine.newGame(null, nate, werner);
     $('#gameover').classList.remove('show');
     toast.classList.remove('show');
     locked = false;
@@ -1140,17 +1168,23 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   }
 
   function updateRules() {
-    $('#rules').textContent = mode === 'live'
-      ? 'real deck · scan flips · undo fixes misreads · works best flat to the camera, torch on at night'
-      : nate
-        ? '😎 face-down deal · tap a pile to flip it · no odds, no hints · clear the deck for +1500'
-        : '▲/▼ on any live pile · wrong = drink the pile & it dies · tie = drink, pile lives · Ace high';
+    if (mode === 'live') {
+      $('#rules').textContent = 'real deck · scan flips · undo fixes misreads · works best flat to the camera, torch on at night';
+      return;
+    }
+    const bits = [nate
+      ? '😎 face-down deal · tap a pile to flip it · no odds, no hints · clear the deck for +1500'
+      : '▲/▼ on any live pile · wrong = drink the pile & it dies · tie = drink, pile lives · Ace high'];
+    if (werner) bits.push('🤪 stuck with your pile till it busts');
+    $('#rules').textContent = bits.join(' · ');
   }
 
-  function toggleNate() {
-    nate = !nate;
+  function toggleVariant(which) {
+    if (which === 'nate') nate = !nate;
+    else werner = !werner;
     $('#nateBtn').classList.toggle('on', nate);
-    if (mode === 'live') { setMode('play'); } // Nate is a virtual-deck game
+    $('#wernerBtn').classList.toggle('on', werner);
+    if (mode === 'live') { setMode('play'); } // variants are virtual-deck games
     reset(); // switching always deals a fresh game
     updateRules();
   }
@@ -1325,7 +1359,8 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     if (btn) onGuess(+btn.dataset.i, btn.dataset.dir);
   });
   $('#newgame').addEventListener('click', reset);
-  $('#nateBtn').addEventListener('click', toggleNate);
+  $('#nateBtn').addEventListener('click', () => toggleVariant('nate'));
+  $('#wernerBtn').addEventListener('click', () => toggleVariant('werner'));
   $('#again').addEventListener('click', reset);
   $('#undoBtn').addEventListener('click', undo);
   $('#modeBtn').addEventListener('click', () => setMode(mode === 'live' ? 'play' : 'live'));
