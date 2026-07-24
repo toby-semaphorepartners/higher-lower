@@ -67,6 +67,9 @@ the left corner of the progress bar. At the end, untouched piles pay +75 each an
 clearing the deck adds +500 (+1500 in Nate mode). Ties and busts score nothing
 (and break the streak). Your device remembers the best score per mode combo —
 beat it for the NEW BEST 🎉 badge — and 📤 Share posts your result anywhere.
+The summary also tells the game's story: how many cards you were from victory,
+⚡ close wins (won by a single rank), 💋 ties, and 💔 bad breaks (busting as a
+75%-or-better favorite).
 
 ## 📷 Live mode — count a real deck
 

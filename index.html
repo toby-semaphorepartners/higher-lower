@@ -207,6 +207,7 @@
     font-size: 18px; min-height: 52px; padding: 10px 24px;
   }
   #gameover .row { display: flex; gap: 10px; }
+  #gameover .beats { font-size: 16px; color: #9aa4b6; }
   #bestBadge { font-size: 17px; font-weight: 800; color: #9aa4b6; }
   #bestBadge.new { font-size: 22px; font-weight: 900; color: #ffc53d; }
 
@@ -532,6 +533,7 @@ const Engine = (() => {
     return { deck, piles, drinks: 0, over: false, reason: null,
              nate: !!nate, werner: !!werner, lock: -1,
              players: mkPlayers(names), turn: 0,
+             stats: { ties: 0, badBreaks: 0, closeWins: 0 },
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -651,12 +653,15 @@ const Engine = (() => {
       pts = Math.round(100 * (1 - p) * pile.cards.length * (1 + 0.5 * (n - 1)));
       state.score += pts;
       state.players[actor].score += pts;
+      if (Math.abs(card.rank - top.rank) === 1) state.stats.closeWins++; // by a single rank
     } else {
       sips = pile.cards.length; // sips to drink: the pile, drawn card included
       state.drinks++;           // the counter tracks drink events: busts + ties
       state.players[actor].drinks++;
       if (!tie) pile.alive = false; // tie: drink and live
       state.streak = { pile: -1, n: 0 }; // tie or bust breaks the streak
+      if (tie) state.stats.ties++;
+      else if (p >= 0.75) state.stats.badBreaks++; // lost as a heavy favorite
     }
     if (state.deck.length === 0) { state.over = true; state.reason = 'deck'; }
     else if (state.piles.every(pl => !pl.alive)) { state.over = true; state.reason = 'dead'; }
@@ -690,6 +695,7 @@ const Engine = (() => {
     return { live: true, phase: 'setup', deck: fullDeck(), piles,
              drinks: 0, over: false, reason: null, history: [],
              players: mkPlayers(names), turn: 0,
+             stats: { ties: 0, badBreaks: 0, closeWins: 0 },
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -697,7 +703,7 @@ const Engine = (() => {
     return JSON.parse(JSON.stringify({
       phase: state.phase, deck: state.deck, piles: state.piles,
       drinks: state.drinks, over: state.over, reason: state.reason,
-      players: state.players, turn: state.turn,
+      players: state.players, turn: state.turn, stats: state.stats,
       score: state.score, streak: state.streak, bonus: state.bonus,
     }));
   }
@@ -1381,6 +1387,16 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
     const b = state.bonus || { untouched: 0, win: 0 };
     const bonusTxt = (b.untouched ? ` (+${b.untouched} untouched)` : '') + (b.win ? ` (+${b.win} clear)` : '');
+    // post-game stats: how close it was, plus the game's story beats
+    const s = state.stats || { ties: 0, badBreaks: 0, closeWins: 0 };
+    const n = (v, w) => `${v} ${w}${v === 1 ? '' : 's'}`;
+    const beats = [];
+    if (s.closeWins) beats.push(`⚡ ${n(s.closeWins, 'close win')}`);
+    if (s.ties) beats.push(`💋 ${n(s.ties, 'tie')}`);
+    if (s.badBreaks) beats.push(`💔 ${n(s.badBreaks, 'bad break')}`);
+    let statsTxt = '';
+    if (!win) statsTxt += `<br><b>${n(state.deck.length, 'card')}</b> from victory`;
+    if (beats.length) statsTxt += `<br><span class="beats">${beats.join(' · ')}</span>`;
     if (state.players.length > 1) {
       // leaderboard: 🏆 top score, 🥴 biggest drinker
       const ranked = state.players.slice().sort((x, y) => y.score - x.score);
@@ -1388,12 +1404,14 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       $('#gameover .sub').innerHTML = ranked.map((p, k) =>
         `${k === 0 ? '🏆 ' : ''}<b>${esc(p.name)}</b> — ${p.score} pts · ${p.drinks} 🍺` +
         `${maxD > 0 && p.drinks === maxD ? ' 🥴' : ''}`).join('<br>') +
-        (bonusTxt ? `<br><span style="color:#9aa4b6">end bonuses${bonusTxt}</span>` : '');
+        (bonusTxt ? `<br><span style="color:#9aa4b6">end bonuses${bonusTxt}</span>` : '') +
+        statsTxt;
     } else {
       $('#gameover .sub').innerHTML =
         `Score: <b>${state.score}</b>${bonusTxt}<br>` +
         `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>` +
-        `Session total: <b>${sessionDrinks[state.players[0].name] || 0}</b>`;
+        `Session total: <b>${sessionDrinks[state.players[0].name] || 0}</b>` +
+        statsTxt;
     }
     $('#gameover').classList.add('show');
   }
