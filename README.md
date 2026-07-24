@@ -19,17 +19,21 @@ context) — or just open it locally for the on-screen game.
   dies. **Tie → drink the same, but the pile survives.**
 - Every pile shows its exact win odds at all times, computed from the cards
   actually seen; the best bet pulses gold. Win by surviving until the deck runs out.
+- Ties flash the screen yellow. A real loss gets the tongue photo; clearing the
+  deck earns the victory photo (*Chillin*).
 
 ## 📷 Live mode — count a real deck
 
 Tap **📷 Live**: the app stops dealing and instead watches your table through the
-rear camera. Scan the 9 starting cards, then tap ▲/▼ to arm a guess and flip the
-real card — it's recognized automatically and the odds, recommendation, drinks, and
-progress all track the physical deck (unseen = 52 − every card seen).
+rear camera. Lay the 9 starting cards out in view — it scans them all in one look,
+numbering the piles to mirror the table — then tap ▲/▼ to arm a guess and flip the
+real card. Each newly dealt card is picked up automatically as the game happens,
+and the odds, recommendation, drinks, and progress all track the physical deck
+(unseen = 52 − every card seen).
 
-- Recognition is pure JS: threshold → find the card → perspective-warp → read the
-  corner rank/suit against baked glyph templates. A card is accepted only when the
-  same read wins 3 of the last 5 frames; already-seen cards are ignored.
+- Recognition is pure JS: threshold → find every card in frame → perspective-warp →
+  read each corner rank/suit against baked glyph templates. A card is accepted only
+  when the same read shows in 3 of the last 5 frames; already-seen cards are ignored.
 - **↩ Undo** reverts the last accepted card completely (drinks included) — that's
   the recovery path for misreads. 🔦 torch toggle appears on phones that support it.
 - Works best with standard index decks, card flat to the camera, torch on at night.

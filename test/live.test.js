@@ -152,8 +152,75 @@ async function injectionFlow() {
   console.log('injection flow ok');
 }
 
+async function tableScanFlow() {
+  // whole-table watching: all 9 starting cards scanned in one look, then a
+  // newly dealt card is picked up mid-game
+  const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || '/opt/pw-browsers/chromium' });
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 } });
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(String(e)));
+  page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
+  await page.goto(URL);
+  await page.addScriptTag({ path: path.join(__dirname, 'paint-card.js') });
+  await page.locator('#modeBtn').click();
+  await page.waitForTimeout(400);
+  await page.evaluate(() => { window.__P = makePainter(window.__live.Vision); });
+
+  const TABLE = [['A', '♠'], ['3', '♥'], ['7', '♦'], ['7', '♣'], ['J', '♠'], ['Q', '♥'], ['K', '♦'], ['4', '♣'], ['9', '♠']];
+  // 3x3 grid in a 960x720 frame; `extra` paints a dealt card over pile 1's spot
+  const injectTable = (extra) => page.evaluate(([table, extra]) => {
+    const f = window.__P.blankFrame(960, 720);
+    table.forEach(([r, s], i) => window.__P.paintFrame(r, s, {
+      into: f, scale: 0.7, x0: 40 + (i % 3) * 310, y0: 20 + Math.floor(i / 3) * 236,
+    }));
+    if (extra) window.__P.paintFrame(extra[0], extra[1], { into: f, scale: 0.7, x0: 40, y0: 20 });
+    window.__live.processFrame(f);
+  }, [TABLE, extra || null]);
+
+  // voting: 2 frames must not accept anything yet
+  await injectTable(); await injectTable();
+  let st = await page.evaluate(() => ({
+    phase: window.__live.state.phase,
+    filled: window.__live.state.piles.filter(p => p.cards.length).length,
+  }));
+  if (st.phase !== 'setup' || st.filled !== 0) fail('2 frames should not accept yet: ' + JSON.stringify(st));
+
+  // two more frames -> 3-of-5 votes for all nine at once
+  await injectTable(); await injectTable();
+  st = await page.evaluate(() => ({
+    phase: window.__live.state.phase,
+    deck: window.__live.state.deck.length,
+    tops: window.__live.state.piles.map(p => p.cards.length
+      ? window.__game.Engine.label(p.cards[0].rank) + p.cards[0].suit : null),
+  }));
+  if (st.phase !== 'play' || st.deck !== 43) fail('table scan should finish setup: ' + JSON.stringify(st));
+  const want = TABLE.map(([r, s]) => r + s);
+  if (JSON.stringify(st.tops) !== JSON.stringify(want)) {
+    fail(`pile order should mirror the table: got ${st.tops} want ${want}`);
+  }
+  await page.screenshot({ path: SCRATCH + '/shot-11-table-scan.png' });
+
+  // deal a new card onto pile 1 (top A♠): arm ▼, K♥ appears on the table
+  await page.locator('.guess[data-i="0"][data-dir="lower"]').click();
+  for (let i = 0; i < 4; i++) await injectTable(['K', '♥']);
+  st = await page.evaluate(() => ({
+    deck: window.__live.state.deck.length,
+    pile0: window.__live.state.piles[0].cards.length,
+    alive: window.__live.state.piles[0].alive,
+    drinks: window.__live.state.drinks,
+  }));
+  if (st.deck !== 42 || st.pile0 !== 2 || !st.alive || st.drinks !== 0) {
+    fail('dealt-card tracking wrong: ' + JSON.stringify(st));
+  }
+
+  if (errors.length) fail('table-scan console errors: ' + errors.join(' | '));
+  await browser.close();
+  console.log('table scan flow ok');
+}
+
 (async () => {
   await smokeWithFakeCamera();
   await injectionFlow();
+  await tableScanFlow();
   console.log(process.exitCode ? 'LIVE TESTS FAILED' : 'all live-mode checks passed');
 })();

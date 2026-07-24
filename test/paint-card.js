@@ -48,10 +48,11 @@
       return { data: img, width: fw, height: fh };
     }
 
-    // card blitted into a dark 640x480 "night table" frame
+    // card blitted into a dark "night table" frame — pass opts.into to keep
+    // painting more cards onto the same frame (a whole table at once)
     function paintFrame(rankLabel, suit, opts) {
       opts = opts || {};
-      const frame = blankFrame();
+      const frame = opts.into || blankFrame(opts.fw, opts.fh);
       const card = paintCanonical(rankLabel, suit);
       const scale = opts.scale || 1.4, x0 = opts.x0 || 180, y0 = opts.y0 || 40;
       const w = Math.round(CW * scale), h = Math.round(CH * scale);
