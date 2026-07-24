@@ -158,7 +158,47 @@ const pLive = Engine.probs(lv, 0); // top A♠, ace high: nothing higher
 assert(pLive.higher === 0 && Math.abs(pLive.lower - 40 / 43) < 1e-12, 'live probs exact (A top: 0 higher, 40/43 lower)');
 assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
 
-// 9. winChance: Monte Carlo estimate of winning from the current position
+// 9. scoring: odds-paid wins, streak bonus, untouched + clear-deck bonuses
+{
+  let lv = Engine.newLive();
+  assert(lv.score === 0 && lv.streak.n === 0, 'live game starts scoreless');
+  const setup10 = [[14, '♠'], [2, '♥'], [7, '♦'], [7, '♣'], [11, '♠'], [12, '♥'], [13, '♦'], [3, '♣'], [9, '♠']];
+  setup10.forEach(([r, s]) => Engine.liveSetup(lv, r, s));
+  assert(lv.score === 0, 'setup earns nothing');
+  // win on pile 1 (top 2♥) with 10♠: p = 40/43, height 2, no streak yet
+  let p = Engine.probs(lv, 1).higher;
+  let r = Engine.liveResolve(lv, 1, 'higher', 10, '♠');
+  assert(r.win && r.pts === Math.round(100 * (1 - p) * 2), 'win pays odds × height');
+  assert(r.pts === 14, 'sanity: 40/43 favorite on a fresh pile pays 14');
+  assert(lv.score === 14, 'score accumulates');
+  // consecutive win on the same pile: height 3, ×1.5 streak
+  p = Engine.probs(lv, 1).higher;
+  r = Engine.liveResolve(lv, 1, 'higher', 13, '♥');
+  assert(r.pts === Math.round(100 * (1 - p) * 3 * 1.5), 'streak: +50% on second consecutive win');
+  const s2 = lv.score;
+  // switching piles resets the streak multiplier
+  p = Engine.probs(lv, 4).higher; // pile 4 top J♠
+  r = Engine.liveResolve(lv, 4, 'higher', 14, '♥');
+  assert(r.pts === Math.round(100 * (1 - p) * 2), 'streak resets on a new pile');
+  assert(lv.score === s2 + r.pts, 'score adds up');
+  // a loss scores nothing and kills the streak
+  r = Engine.liveResolve(lv, 4, 'higher', 4, '♦'); // top is now A♥: nothing is higher
+  assert(!r.win && r.pts === 0 && lv.streak.n === 0, 'loss: no points, streak dead');
+  // undo rolls the score back too
+  Engine.liveUndo(lv); Engine.liveUndo(lv);
+  assert(lv.score === s2, 'undo restores the score');
+  // guaranteed win pays zero; end-of-game bonuses land on top
+  const st = { deck: [{ rank: 14, suit: '♠' }],
+    piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true })),
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null };
+  const rr = Engine.guess(st, 0, 'higher'); // p = 1: the sure thing pays nothing
+  assert(rr.win && rr.pts === 0, 'sure thing pays 0');
+  assert(st.over && st.reason === 'deck', 'deck exhausted ends the game');
+  assert(st.bonus.untouched === 8 * 75 && st.bonus.win === 500, 'end bonuses: 8 untouched piles + clear');
+  assert(st.score === 1100, 'final score = bonuses only');
+}
+
+// 10. winChance: Monte Carlo estimate of winning from the current position
 {
   const mk = (tops, deckRanks) => ({
     deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),

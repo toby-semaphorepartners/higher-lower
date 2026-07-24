@@ -90,6 +90,14 @@
   #winChance.good { color: #3ddc84; }
   #winChance.mid  { color: #ffc53d; }
   #winChance.bad  { color: #ff6b74; }
+  #scoreChip {
+    position: absolute; left: 9px; top: 0; bottom: 0;
+    display: flex; align-items: center;
+    font-size: 13px; font-weight: 900; color: #ffc53d;
+    text-shadow: 0 1px 1px rgba(0,0,0,.7);
+  }
+  .guess .pts { font-size: 12px; font-weight: 800; color: #ffc53d; }
+  .guess.best .pts, .guess.armed .pts { color: inherit; }
 
   /* ---- camera strip (Live mode) ---- */
   #cam {
@@ -204,7 +212,7 @@
   .btns { display: flex; flex-direction: column; gap: 5px; }
   .guess {
     min-height: 52px;
-    display: flex; align-items: center; justify-content: center; gap: 8px;
+    display: flex; align-items: center; justify-content: center; gap: 6px;
     font: inherit; font-size: 19px; font-weight: 900; color: #ffffff;
     background: #1e2530; border: 1px solid #303a4a; border-radius: 12px;
     cursor: pointer;
@@ -327,7 +335,7 @@
     <button id="modeBtn" title="Toggle camera Live mode">📷 Live</button>
     <button id="newgame">New</button>
   </header>
-  <div id="progress"><div id="progressFill"></div><span id="progressLbl"></span><span id="winChance"></span></div>
+  <div id="progress"><div id="progressFill"></div><span id="progressLbl"></span><span id="scoreChip"></span><span id="winChance"></span></div>
   <div id="cam">
     <video id="camVideo" playsinline muted></video>
     <canvas id="camOverlay"></canvas>
@@ -381,7 +389,8 @@ const Engine = (() => {
     }
     const piles = [];
     for (let i = 0; i < PILES; i++) piles.push({ cards: [deck.pop()], alive: true });
-    return { deck, piles, drinks: 0, over: false, reason: null };
+    return { deck, piles, drinks: 0, over: false, reason: null,
+             score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
   // Exact clean-win odds from the remaining deck's known composition.
@@ -459,27 +468,45 @@ const Engine = (() => {
     return best;
   }
 
-  // Shared win/tie/loss application: the card is already off the deck.
-  function resolve(state, pile, dir, card) {
+  // Shared win/tie/loss application: the card is already off the deck; p is
+  // the shown win probability for the chosen direction, captured before the
+  // draw so scoring pays exactly the odds the player saw.
+  function resolve(state, i, dir, card, p) {
+    const pile = state.piles[i];
     const top = pile.cards[pile.cards.length - 1];
     pile.cards.push(card);
     const win = dir === 'higher' ? card.rank > top.rank : card.rank < top.rank;
     const tie = card.rank === top.rank;
-    let sips = 0;
-    if (!win) {
+    let sips = 0, pts = 0;
+    if (win) {
+      // risk pays: 100×(1−odds), × pile height (the sips that were at stake),
+      // × streak bonus (+50% per consecutive win on this same pile)
+      const n = state.streak.pile === i ? state.streak.n + 1 : 1;
+      state.streak = { pile: i, n };
+      pts = Math.round(100 * (1 - p) * pile.cards.length * (1 + 0.5 * (n - 1)));
+      state.score += pts;
+    } else {
       sips = pile.cards.length; // sips to drink: the pile, drawn card included
       state.drinks++;           // the counter tracks drink events: busts + ties
       if (!tie) pile.alive = false; // tie: drink and live
+      state.streak = { pile: -1, n: 0 }; // tie or bust breaks the streak
     }
     if (state.deck.length === 0) { state.over = true; state.reason = 'deck'; }
-    else if (state.piles.every(p => !p.alive)) { state.over = true; state.reason = 'dead'; }
-    return { card, win, tie, sips };
+    else if (state.piles.every(pl => !pl.alive)) { state.over = true; state.reason = 'dead'; }
+    if (state.over) {
+      // untouched = never guessed on (every guess grows a pile past 1 card)
+      const untouched = state.piles.filter(pl => pl.cards.length === 1).length;
+      state.bonus = { untouched: untouched * 75, win: state.reason === 'deck' ? 500 : 0 };
+      state.score += state.bonus.untouched + state.bonus.win;
+    }
+    return { card, win, tie, sips, pts };
   }
 
   function guess(state, i, dir) {
     const pile = state.piles[i];
     if (state.over || !pile.alive || state.deck.length === 0) return null;
-    return resolve(state, pile, dir, state.deck.pop());
+    const p = probs(state, i)[dir];
+    return resolve(state, i, dir, state.deck.pop(), p);
   }
 
   // ---- Live mode: a physical deck is the game; state.deck = cards not yet seen ----
@@ -487,13 +514,15 @@ const Engine = (() => {
     const piles = [];
     for (let i = 0; i < PILES; i++) piles.push({ cards: [], alive: true });
     return { live: true, phase: 'setup', deck: fullDeck(), piles,
-             drinks: 0, over: false, reason: null, history: [] };
+             drinks: 0, over: false, reason: null, history: [],
+             score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
   function snap(state) {
     return JSON.parse(JSON.stringify({
       phase: state.phase, deck: state.deck, piles: state.piles,
       drinks: state.drinks, over: state.over, reason: state.reason,
+      score: state.score, streak: state.streak, bonus: state.bonus,
     }));
   }
 
@@ -519,7 +548,8 @@ const Engine = (() => {
     if (state.phase !== 'play' || state.over || !state.piles[i].alive) return null;
     if (!state.deck.some(c => c.rank === rank && c.suit === suit)) return { dup: true };
     state.history.push(snap(state));
-    return resolve(state, state.piles[i], dir, takeCard(state, rank, suit));
+    const p = probs(state, i)[dir]; // shown odds: the flipped card is still unseen
+    return resolve(state, i, dir, takeCard(state, rank, suit), p);
   }
 
   // Revert the last accepted card entirely (misread recovery).
@@ -943,11 +973,14 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       let btns = '';
       if (!setup && pile.cards.length) {
         const p = Engine.probs(state, i);
+        // potential payout preview: odds × height-after-win × live streak bonus
+        const sn = state.streak && state.streak.pile === i ? state.streak.n : 0;
+        const pot = (prob) => Math.round(100 * (1 - prob) * (pile.cards.length + 1) * (1 + 0.5 * sn));
         btns = `<div class="btns">
           <button class="guess ${isArmed && armed.dir === 'higher' ? 'armed' : isRec && !armed && rec.dir === 'higher' ? 'best' : ''}" data-i="${i}" data-dir="higher">
-            <span class="arrow">▲</span>${pct(p.higher)}</button>
+            <span class="arrow">▲</span>${pct(p.higher)}<span class="pts">+${pot(p.higher)}</span></button>
           <button class="guess ${isArmed && armed.dir === 'lower' ? 'armed' : isRec && !armed && rec.dir === 'lower' ? 'best' : ''}" data-i="${i}" data-dir="lower">
-            <span class="arrow">▼</span>${pct(p.lower)}</button>
+            <span class="arrow">▼</span>${pct(p.lower)}<span class="pts">+${pot(p.lower)}</span></button>
         </div>`;
       }
       return `<div class="${cls}" data-i="${i}">${cardFace(pile, i)}${btns}</div>`;
@@ -975,6 +1008,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       wc.textContent = `win ${Math.round(p * 100)}%`;
       wc.className = p >= 0.5 ? 'good' : p >= 0.25 ? 'mid' : 'bad';
     }
+    $('#scoreChip').textContent = setup ? '' : `${state.score} pts`;
     $('#cam').classList.toggle('compact', mode === 'live' && state.phase === 'play');
     renderLiveStatus();
   }
@@ -1025,7 +1059,10 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#goCap').textContent = 'Chillin';
     $('#goCap').hidden = !win;
     $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
+    const b = state.bonus || { untouched: 0, win: 0 };
+    const bonusTxt = (b.untouched ? ` (+${b.untouched} untouched)` : '') + (b.win ? ` (+${b.win} clear)` : '');
     $('#gameover .sub').innerHTML =
+      `Score: <b>${state.score}</b>${bonusTxt}<br>` +
       `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>Session total: <b>${sessionDrinks}</b>`;
     $('#gameover').classList.add('show');
   }

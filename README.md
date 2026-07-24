@@ -25,6 +25,15 @@ context) — or just open it locally for the on-screen game.
 - The corner of the progress bar shows your live chance of winning the game,
   estimated by replaying the rest of the deck from the current position.
 
+## Scoring
+
+Risk pays. A winning guess earns **100 × (1 − its shown odds)** — a coin flip pays
+~50, a sure thing pays 0 — multiplied by the pile's new height (the sips you were
+risking) and a streak bonus of +50% per consecutive win on the same pile. Each
+▲/▼ button shows its potential payout next to the odds, and your score sits in
+the left corner of the progress bar. At the end, untouched piles pay +75 each and
+clearing the deck adds +500. Ties and busts score nothing (and break the streak).
+
 ## 📷 Live mode — count a real deck
 
 Tap **📷 Live**: the app stops dealing and instead watches your table through the

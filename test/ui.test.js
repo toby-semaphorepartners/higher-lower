@@ -22,9 +22,11 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if ((await page.textContent('#deckCount')) !== '43') fail('deck badge should read 43');
   if ((await page.locator('.pile.rec').count()) !== 1) fail('exactly one recommended pile');
   if ((await page.locator('.guess.best').count()) !== 1) fail('exactly one best button');
-  // every live pile shows both percentages
+  // every live pile shows both percentages plus a potential payout
   const pcts = await page.locator('.guess').allTextContents();
-  if (!pcts.every(t => /%$/.test(t.trim()))) fail('all buttons show a percentage');
+  if (!pcts.every(t => /%\+\d+$/.test(t.trim()))) fail('all buttons show odds and payout');
+  // score chip starts at zero in the progress bar corner
+  if ((await page.textContent('#scoreChip')) !== '0 pts') fail('score chip should start at 0 pts');
   // tap targets big enough
   const small = await page.$$eval('.guess', els => els.filter(el => el.getBoundingClientRect().height < 44).length);
   if (small > 0) fail(`${small} guess buttons under 44px tall`);
@@ -114,6 +116,10 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if (!(await page.locator('#gameover.show').count())) fail('game-over overlay not shown');
   const wcEnd = await page.textContent('#winChance');
   if (!/^win (100|0)%$/.test(wcEnd)) fail('terminal win chance should be 0/100: ' + wcEnd);
+  const goSub = await page.textContent('#gameover .sub');
+  if (!/Score: \d+/.test(goSub)) fail('game over should show the final score: ' + goSub);
+  const scoreEnd = await page.textContent('#scoreChip');
+  if (!/^\d+ pts$/.test(scoreEnd)) fail('score chip should show a number: ' + scoreEnd);
   await page.screenshot({ path: SCRATCH + '/shot-5-gameover.png' });
 
   // new game resets board but keeps session drinks
