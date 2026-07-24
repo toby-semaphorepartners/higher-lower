@@ -22,6 +22,8 @@ context) — or just open it locally for the on-screen game.
 - Ties flash the screen yellow. A real loss gets the tongue photo; clearing the
   deck earns the victory photo (*Chillin*).
 - The 🍺 counter counts drinking events — piles lost plus ties — not total sips.
+- The corner of the progress bar shows your live chance of winning the game,
+  estimated by replaying the rest of the deck from the current position.
 
 ## 📷 Live mode — count a real deck
 

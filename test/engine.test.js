@@ -158,4 +158,24 @@ const pLive = Engine.probs(lv, 0); // top A♠, ace high: nothing higher
 assert(pLive.higher === 0 && Math.abs(pLive.lower - 40 / 43) < 1e-12, 'live probs exact (A top: 0 higher, 40/43 lower)');
 assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
 
+// 9. winChance: Monte Carlo estimate of winning from the current position
+{
+  const mk = (tops, deckRanks) => ({
+    deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),
+    piles: tops.map(r => ({ cards: [{ rank: r, suit: '♥' }], alive: true })),
+    drinks: 0, over: false, reason: null,
+  });
+  assert(Engine.winChance(mk([2], [14])) === 1, 'guaranteed win = 1');
+  assert(Engine.winChance(mk([14], [14, 14])) === 1, 'ties never bust, so all-ties = 1');
+  // top 8, deck {7,9}: greedy goes higher; drawing the 7 first busts -> exactly 50/50
+  const coin = Engine.winChance(mk([8], [7, 9]), 4000);
+  assert(coin > 0.45 && coin < 0.55, `50/50 position ≈ 0.5 (got ${coin})`);
+  const fresh = Engine.newGame(makeRng(11));
+  const wc = Engine.winChance(fresh);
+  assert(wc > 0.2 && wc < 0.7, `fresh game estimate plausible (got ${wc})`);
+  assert(wc === Engine.winChance(fresh), 'deterministic for the same position');
+  assert(Engine.winChance({ over: true, reason: 'deck' }) === 1, 'won game = 1');
+  assert(Engine.winChance({ over: true, reason: 'dead' }) === 0, 'lost game = 0');
+}
+
 console.log(process.exitCode ? 'TESTS FAILED' : 'all engine tests passed');
