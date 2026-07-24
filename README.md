@@ -35,8 +35,9 @@ face-down piles can't be guessed on. Clearing the deck blind pays a tripled
 
 ## 🤪 Wacky Werner
 
-Tap 🤪 and the moment you guess on a pile you're stuck with it — ▲/▼ vanish
-everywhere else — until it busts. Then pick your next victim. The win estimate
+Tap 🤪 and the moment you guess on a pile you're stuck with it — ▲/▼ grey out
+everywhere else (odds stay visible) — until it busts. Then pick your next
+victim. The win estimate
 knows the rule and prices your chances accordingly. Stacks with Nate mode for
 the full blindfolded-and-handcuffed experience. Toggling deals a fresh game.
 
