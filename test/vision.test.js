@@ -108,4 +108,20 @@ for (const pool of [['♠', '♣'], ['♥', '♦']]) {
   assert(out.read && out.read.rank === '6' && out.read.suit === '♣', `off-center 6♣ read (got ${out.read && out.read.rank + out.read.suit})`);
 }
 
+// 9. detectAll: several cards in one frame, returned in row-major table order
+{
+  const f = P.blankFrame(960, 720);
+  P.paintFrame('2', '♠', { into: f, scale: 0.9, x0: 60, y0: 40 });
+  P.paintFrame('K', '♥', { into: f, scale: 0.9, x0: 420, y0: 60 }); // slight y jitter, same row
+  P.paintFrame('7', '♦', { into: f, scale: 0.9, x0: 200, y0: 380 });
+  const outs = Vision.detectAll(f.data, f.width, f.height);
+  assert(outs.length === 3, `detectAll finds 3 quads (got ${outs.length})`);
+  const reads = outs.map(o => o.read && o.read.rank + o.read.suit);
+  assert(JSON.stringify(reads) === JSON.stringify(['2♠', 'K♥', '7♦']),
+    `detectAll reads row-major (got ${reads})`);
+
+  const blank = P.blankFrame();
+  assert(Vision.detectAll(blank.data, blank.width, blank.height).length === 0, 'blank frame: no quads');
+}
+
 console.log(process.exitCode ? 'VISION TESTS FAILED' : 'all vision tests passed');

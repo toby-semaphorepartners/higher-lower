@@ -52,7 +52,7 @@ if (pileIdx >= 0) {
   assert(!r.win && !r.tie, 'forced loss loses (non-tie)');
   assert(r.sips === before + 1, 'sips = pile size incl. drawn card');
   assert(!st.piles[pileIdx].alive, 'pile dies on loss');
-  assert(st.drinks === r.sips, 'drinks accumulate');
+  assert(st.drinks === 1, 'one drink event per bust');
 } else {
   console.log('note: no forced-loss pile with this seed');
 }
@@ -69,7 +69,7 @@ for (let seed = 1; seed <= 500 && !tieChecked; seed++) {
   assert(!r.win && r.tie, 'tie is not a win but flagged tie');
   assert(r.sips === before + 1, 'tie sips = pile size incl. drawn card');
   assert(s2.piles[ti].alive, 'tie: pile survives');
-  assert(s2.drinks === r.sips, 'tie drinks accumulate');
+  assert(s2.drinks === 1, 'tie counts as one drink event');
   tieChecked = true;
 }
 assert(tieChecked, 'found and verified a forced tie');
@@ -135,13 +135,13 @@ assert(Engine.liveResolve(lv, 0, 'higher', 14, '♠').dup === true, 'already-see
 // pile 0 top is A♠: guessing higher with a K♥ is a guaranteed non-tie loss
 let res8 = Engine.liveResolve(lv, 0, 'higher', 13, '♥');
 assert(!res8.win && !res8.tie && res8.sips === 2 && !lv.piles[0].alive, 'live loss: 2 sips, pile dies');
-assert(lv.deck.length === 42 && lv.drinks === 2, 'live loss consumed the card and charged drinks');
+assert(lv.deck.length === 42 && lv.drinks === 1, 'live loss consumed the card and counted one drink');
 // tie on pile 2 (top 7♦): flip 7♥
 res8 = Engine.liveResolve(lv, 2, 'higher', 7, '♥');
-assert(!res8.win && res8.tie && lv.piles[2].alive && lv.drinks === 4, 'live tie: drinks, pile lives');
+assert(!res8.win && res8.tie && lv.piles[2].alive && lv.drinks === 2, 'live tie: counts a drink, pile lives');
 // win on pile 1 (top 2♥): flip 10♠ higher
 res8 = Engine.liveResolve(lv, 1, 'higher', 10, '♠');
-assert(res8.win && lv.drinks === 4 && lv.piles[1].alive, 'live win: no drinks');
+assert(res8.win && lv.drinks === 2 && lv.piles[1].alive, 'live win: no drinks');
 // undo the win: card back in unseen, pile shrinks
 const deckBefore8 = lv.deck.length;
 assert(Engine.liveUndo(lv) === true, 'undo succeeds');
