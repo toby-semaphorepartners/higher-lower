@@ -192,6 +192,22 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   await page.waitForTimeout(200);
   if ((await page.locator('.guess').count()) !== 18) fail('werner off: free pile choice returns');
 
+  // Streak flame: shows on the hot pile once a win streak starts
+  const streakN = await page.evaluate(() => {
+    const g = window.__game;
+    let guard = 0;
+    while (g.state.streak.n < 1 && !g.state.over && guard++ < 50) {
+      const rec = g.Engine.recommend(g.state);
+      g.Engine.guess(g.state, rec.pile, rec.dir);
+    }
+    g.refresh();
+    return g.state.over ? 0 : g.state.streak.n;
+  });
+  if (streakN >= 1 && !(await page.locator('.flame').count())) fail('streak flame missing');
+  if (!(await page.locator('#confetti').count())) fail('confetti canvas missing');
+  await page.evaluate(() => window.__game.reset());
+  await page.waitForTimeout(150);
+
   // Sound: mute toggle exists and persists
   const mLbl = await page.textContent('#muteBtn');
   if (!/🔊|🔇/.test(mLbl)) fail('mute button missing: ' + mLbl);

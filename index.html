@@ -309,6 +309,28 @@
     50%      { box-shadow: 0 0 0 3px #ffc53d, 0 0 26px 8px rgba(255,197,61,.85); }
   }
   .pile.rec .card { animation: pulse 1.2s ease-in-out infinite; }
+
+  /* landing card flip + pile-death shake (guarded for reduced motion) */
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes flipin { from { transform: rotateY(88deg); } to { transform: rotateY(0); } }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px) rotate(-2deg); }
+      40% { transform: translateX(5px) rotate(2deg); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(3px); }
+    }
+    .pile.landed .card { animation: flipin .35s ease-out; }
+    .pile.rec.landed .card { animation: flipin .35s ease-out, pulse 1.2s ease-in-out .35s infinite; }
+    .pile.died .card { animation: shake .45s ease-in; }
+  }
+
+  /* streak flame: grows with the multiplier */
+  .card .flame {
+    position: absolute; left: 6px; bottom: 4px;
+    font-weight: 900; color: #ff9d2e; line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
   .pile.armed .card { box-shadow: 0 0 0 3px #2196c9, 0 0 18px 4px rgba(33,150,201,.7); animation: none; }
 
   /* dead pile */
@@ -390,6 +412,7 @@
     text-align: center; padding: 24px;
   }
   #gameover.show { display: flex; }
+  #confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   #gameover img {
     max-width: 78vw; max-height: 38vh;
     border-radius: 16px;
@@ -446,6 +469,7 @@
 <div id="toast"><img id="toastImg" alt="" hidden><div class="big"></div><div class="sub"></div></div>
 
 <div id="gameover">
+  <canvas id="confetti"></canvas>
   <img id="goImg" alt="" hidden>
   <div class="cap" id="goCap" hidden></div>
   <div class="big"></div>
@@ -1184,10 +1208,16 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const top = pile.cards[pile.cards.length - 1];
     const color = Engine.RED[top.suit] ? 'red' : 'blk';
     const height = pile.cards.length >= 3 ? 'h3' : 'h' + pile.cards.length;
+    // streak flame: this pile is hot — shows the multiplier the next win pays
+    const st = cur();
+    const flame = pile.alive && st.streak && st.streak.pile === idx && st.streak.n > 0
+      ? `<div class="flame" style="font-size:${13 + Math.min(st.streak.n, 6) * 2}px">🔥×${(1 + 0.5 * st.streak.n).toFixed(1).replace(/\.0$/, '')}</div>`
+      : '';
     return `<div class="card ${color} ${height}">
       <div class="corner">${Engine.label(top.rank)}<br>${top.suit}</div>
       <div class="pip">${top.suit}</div>
       ${pile.alive ? '' : '<div class="x">✕</div>'}
+      ${flame}
       <div class="count">×${pile.cards.length}</div>
     </div>`;
   }
@@ -1201,7 +1231,9 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       const isArmed = armed && armed.pile === i;
       const cls = ['pile', pile.alive ? '' : 'dead', isRec && !armed ? 'rec' : '',
                    isArmed ? 'armed' : '',
-                   fx && fx.pile === i && fx.win ? 'won' : ''].join(' ');
+                   fx && fx.pile === i && fx.win ? 'won' : '',
+                   fx && fx.pile === i && fx.anim && !fx.dead ? 'landed' : '',
+                   fx && fx.pile === i && fx.dead ? 'died' : ''].join(' ');
       let btns = '';
       // Werner: while you're riding another pile these buttons grey out —
       // still showing their odds — and won't take a tap until yours busts
@@ -1314,6 +1346,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const win = state.reason === 'deck';
     const already = $('#gameover').classList.contains('show');
     if (win && !already) Sfx.fanfare();
+    if (win && !already) setTimeout(confetti, 60); // after the overlay lays out
     if (!already) {
       // best score for this mode combo — the table's top player sets the mark
       const k = modeKey(state);
@@ -1359,7 +1392,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     if (result.win) Sfx.win(state.streak.n);
     else if (result.tie) Sfx.tie();
     else Sfx.bust();
-    render(result.win ? { pile: i, win: true } : null);
+    render({ pile: i, win: result.win, anim: true, dead: !result.win && !result.tie });
     if (result.win) {
       setTimeout(() => { render(); maybeGameOver(); }, 450);
     } else {
@@ -1413,7 +1446,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function onFlip(i) {
     if (locked || mode !== 'play') return;
-    if (Engine.flip(vState, i)) { Sfx.flip(); render(); }
+    if (Engine.flip(vState, i)) { Sfx.flip(); render({ pile: i, anim: true }); }
   }
 
   // ---- players editor (pass-and-play) ----
@@ -1453,6 +1486,36 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   $('#editPlayers').addEventListener('click', openPlayers);
   $('#turnStrip').addEventListener('click', openPlayers);
   $('#drinkStat').addEventListener('click', openPlayers);
+
+  // ---- victory confetti: pure canvas, ~2.5s, no libs ----
+  function confetti() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const c = $('#confetti');
+    c.width = c.clientWidth; c.height = c.clientHeight;
+    const ctx = c.getContext('2d');
+    const COLORS = ['#ffc53d', '#3ddc84', '#7fd6ff', '#ff6b74', '#f2f4f8'];
+    const parts = Array.from({ length: 80 }, () => ({
+      x: Math.random() * c.width, y: -20 - Math.random() * c.height * 0.3,
+      vx: (Math.random() - 0.5) * 2.4, vy: 2 + Math.random() * 3,
+      s: 5 + Math.random() * 6, r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+      col: COLORS[(Math.random() * COLORS.length) | 0],
+    }));
+    const t0 = performance.now();
+    (function tick(t) {
+      ctx.clearRect(0, 0, c.width, c.height);
+      for (const p of parts) {
+        p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.fillStyle = p.col;
+        ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+        ctx.restore();
+      }
+      if (t - t0 < 2600 && $('#gameover').classList.contains('show')) requestAnimationFrame(tick);
+      else ctx.clearRect(0, 0, c.width, c.height);
+    })(t0);
+  }
 
   // ---- share the result (Web Share API, clipboard fallback) ----
   function shareText() {
