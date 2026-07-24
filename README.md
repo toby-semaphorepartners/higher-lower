@@ -22,7 +22,9 @@ in-page, no audio files.
 - Wrong → drink as many sips as cards in the pile (drawn card included); the pile
   dies. **Tie → drink the same, but the pile survives.**
 - Every pile shows its exact win odds at all times, computed from the cards
-  actually seen; the best bet pulses gold. Win by surviving until the deck runs out.
+  actually seen; the best bet pulses gold — and when it's an exact 50/50, the
+  🪙 marks an honest coin flip instead of a silent default. Win by surviving
+  until the deck runs out.
 - Ties flash the screen yellow with the kiss photo (a tie is like kissing your
   sister). A real loss pulls a random punishment photo — usually the tongue or
   the kid with the margarita, with rare drops mixed in — and busting a 6+ card
@@ -67,9 +69,10 @@ the left corner of the progress bar. At the end, untouched piles pay +75 each an
 clearing the deck adds +500 (+1500 in Nate mode). Ties and busts score nothing
 (and break the streak). Your device remembers the best score per mode combo —
 beat it for the NEW BEST 🎉 badge — and 📤 Share posts your result anywhere.
-The summary also tells the game's story: how many cards you were from victory,
-⚡ close wins (won by a single rank), 💋 ties, and 💔 bad breaks (busting as a
-75%-or-better favorite).
+The summary also tells the game's story: the final board (every stack as it
+ended, face-down piles revealed), how many stacks were still standing, how many
+cards you were from victory, ⚡ close wins (won by a single rank), 💋 ties, and
+💔 bad breaks (busting as a 75%-or-better favorite).
 
 ## 📷 Live mode — count a real deck
 
