@@ -109,9 +109,9 @@ async function injectionFlow() {
     drinks: window.__live.state.drinks,
     deck: window.__live.state.deck.length,
   }));
-  if (st.alive || st.drinks !== 2 || st.deck !== 41) fail('loss flow wrong: ' + JSON.stringify(st));
+  if (st.alive || st.drinks !== 1 || st.deck !== 41) fail('loss flow wrong: ' + JSON.stringify(st));
   const hdrDrinks = await page.textContent('#drinkCount');
-  if (hdrDrinks !== '2') fail('session drinks should read 2, got ' + hdrDrinks);
+  if (hdrDrinks !== '1') fail('session drinks should read 1, got ' + hdrDrinks);
 
   // --- undo the loss ---
   await page.locator('#undoBtn').click();
@@ -133,7 +133,7 @@ async function injectionFlow() {
     alive: window.__live.state.piles[2].alive,
     drinks: window.__live.state.drinks,
   }));
-  if (!st.alive || st.drinks !== 2) fail('tie should drink 2 and live: ' + JSON.stringify(st));
+  if (!st.alive || st.drinks !== 1) fail('tie should count one drink and live: ' + JSON.stringify(st));
 
   // --- flip with nothing armed: ignored ---
   await inject(null, null, 5);

@@ -92,7 +92,7 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if (!sawToast) fail('never saw the drink toast');
   if (!sawDead) fail('never produced a dead pile');
   const drinks = parseInt(await page.textContent('#drinkCount'), 10);
-  if (!(drinks >= 2)) fail('drink counter should be >= 2 after a loss, got ' + drinks);
+  if (!(drinks >= 1)) fail('drink counter should be >= 1 after a loss, got ' + drinks);
   await page.screenshot({ path: SCRATCH + '/shot-4-dead-pile.png' });
 
   // drive to game over via the recommended button each time

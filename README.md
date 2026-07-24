@@ -21,6 +21,7 @@ context) — or just open it locally for the on-screen game.
   actually seen; the best bet pulses gold. Win by surviving until the deck runs out.
 - Ties flash the screen yellow. A real loss gets the tongue photo; clearing the
   deck earns the victory photo (*Chillin*).
+- The 🍺 counter counts drinking events — piles lost plus ties — not total sips.
 
 ## 📷 Live mode — count a real deck
 

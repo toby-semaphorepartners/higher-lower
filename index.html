@@ -410,8 +410,8 @@ const Engine = (() => {
     const tie = card.rank === top.rank;
     let sips = 0;
     if (!win) {
-      sips = pile.cards.length; // drink the pile, drawn card included
-      state.drinks += sips;
+      sips = pile.cards.length; // sips to drink: the pile, drawn card included
+      state.drinks++;           // the counter tracks drink events: busts + ties
       if (!tie) pile.alive = false; // tie: drink and live
     }
     if (state.deck.length === 0) { state.over = true; state.reason = 'deck'; }
@@ -961,12 +961,12 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#goCap').hidden = !win;
     $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
     $('#gameover .sub').innerHTML =
-      `This game: <b>${state.drinks}</b> sips<br>Session total: <b>${sessionDrinks}</b> sips`;
+      `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>Session total: <b>${sessionDrinks}</b>`;
     $('#gameover').classList.add('show');
   }
 
   function applyResult(i, result) {
-    if (!result.win) sessionDrinks += result.sips;
+    if (!result.win) sessionDrinks++;
     render(result.win ? { pile: i, win: true } : null);
     if (result.win) {
       setTimeout(() => { render(); maybeGameOver(); }, 450);
