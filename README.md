@@ -1,1 +1,55 @@
-# higher-lower
+# Higher / Lower 🍺
+
+A one-page multi-pile higher/lower drinking game. Dark, high-contrast, built for
+one-handed use outdoors at night. Single self-contained HTML file — no build, no
+dependencies, no backend, no tracking; all state is in-memory (refresh = fresh game).
+
+## Play
+
+Open `index.html` in any browser. That's the whole install.
+
+For phone use, host the file anywhere HTTPS (camera access requires a secure
+context) — or just open it locally for the on-screen game.
+
+## Rules
+
+- 9 piles dealt face-up in a 3×3 grid. Tap ▲ or ▼ on any live pile to guess
+  whether the next card is higher or lower than its top card (ace high).
+- Wrong → drink as many sips as cards in the pile (drawn card included); the pile
+  dies. **Tie → drink the same, but the pile survives.**
+- Every pile shows its exact win odds at all times, computed from the cards
+  actually seen; the best bet pulses gold. Win by surviving until the deck runs out.
+
+## 📷 Live mode — count a real deck
+
+Tap **📷 Live**: the app stops dealing and instead watches your table through the
+rear camera. Scan the 9 starting cards, then tap ▲/▼ to arm a guess and flip the
+real card — it's recognized automatically and the odds, recommendation, drinks, and
+progress all track the physical deck (unseen = 52 − every card seen).
+
+- Recognition is pure JS: threshold → find the card → perspective-warp → read the
+  corner rank/suit against baked glyph templates. A card is accepted only when the
+  same read wins 3 of the last 5 frames; already-seen cards are ignored.
+- **↩ Undo** reverts the last accepted card completely (drinks included) — that's
+  the recovery path for misreads. 🔦 torch toggle appears on phones that support it.
+- Works best with standard index decks, card flat to the camera, torch on at night.
+
+## Development
+
+Everything lives in `index.html` in three script blocks: `#engine` (rules + odds)
+and `#vision` (recognizer) are DOM-free and unit-tested under Node; `#ui` is the
+rendering and camera plumbing.
+
+```sh
+npm install           # playwright-core only (tests)
+npm test              # engine + vision under Node, then two headless-Chromium suites
+```
+
+The browser tests expect a Chromium binary; set `CHROMIUM=/path/to/chromium` if it
+isn't at `/opt/pw-browsers/chromium`. Screenshots land in `test/out/`.
+
+The recognizer's glyph templates are baked data inside `index.html`. To regenerate
+(e.g. after changing the normalization), replace the `TEMPLATES` JSON literal with
+the placeholder `__TEMPLATES_JSON__` and run `node test/gen-templates.js` — it
+renders glyphs in headless Chromium through the same normalization code the runtime
+uses. Never hand-edit the baked hex.
