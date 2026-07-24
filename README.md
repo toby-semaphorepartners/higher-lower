@@ -25,6 +25,15 @@ context) — or just open it locally for the on-screen game.
 - The corner of the progress bar shows your live chance of winning the game,
   estimated by replaying the rest of the deck from the current position.
 
+## 👥 Pass-and-play
+
+Tap the 🍺 chip (or the turn strip, or 👥 on the game-over screen) to add up to
+8 named players. Turns rotate automatically after every guess; the turn strip
+shows who's up and who's next, the drink toast names who drinks, and the
+game-over screen becomes a leaderboard — 🏆 top score, 🥴 biggest drinker. In
+Wacky Werner the stuck pile passes to the next player; in Nate mode flipping a
+pile is free. Changing the roster deals a fresh game. Solo play is unchanged.
+
 ## 😎 Nate mode
 
 Tap 😎 to restart with all nine piles dealt face-down. Pick a pile to flip over,

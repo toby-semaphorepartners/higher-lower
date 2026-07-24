@@ -156,6 +156,57 @@
   }
   #liveStatus.show { display: block; }
 
+  /* ---- turn strip (2+ players) ---- */
+  #turnStrip {
+    margin: 0 4px 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #161b24; border: 1px solid #29303d;
+    font-size: 15px; font-weight: 800;
+    text-align: center;
+    cursor: pointer;
+  }
+  #turnStrip b { color: #ffc53d; }
+  #turnStrip .nxt { color: #9aa4b6; }
+
+  /* ---- players editor ---- */
+  #playersOv {
+    position: fixed; inset: 0; z-index: 40;
+    display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    background: rgba(11, 14, 20, .96);
+    padding: 24px;
+  }
+  #playersOv.show { display: flex; }
+  #playersOv .big { font-size: 30px; font-weight: 900; }
+  #playersOv .hint { font-size: 14px; font-weight: 700; color: #9aa4b6; }
+  #plist { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; }
+  .prow { display: flex; gap: 8px; }
+  .prow input {
+    flex: 1; min-width: 0;
+    min-height: 48px; padding: 8px 12px;
+    font: inherit; font-size: 17px; font-weight: 700; color: #f2f4f8;
+    background: #161b24; border: 1px solid #303a4a; border-radius: 12px;
+    -webkit-user-select: text; user-select: text;
+  }
+  .prow button, #addPlayer {
+    min-width: 48px; min-height: 48px; padding: 8px 14px;
+    font: inherit; font-size: 17px; font-weight: 800; color: #f2f4f8;
+    background: #1e2530; border: 1px solid #303a4a; border-radius: 12px;
+    cursor: pointer;
+  }
+  #playersDone {
+    min-height: 56px; padding: 12px 36px;
+    font: inherit; font-size: 20px; font-weight: 900; color: #0b0e14;
+    background: #ffc53d; border: none; border-radius: 16px;
+    cursor: pointer;
+  }
+  #playersDone:active, #addPlayer:active { transform: scale(.96); }
+  #gameover button.alt {
+    background: #1e2530; color: #f2f4f8; border: 1px solid #303a4a;
+    font-size: 18px; min-height: 52px; padding: 10px 24px;
+  }
+
   /* ---- grid ---- */
   #grid {
     flex: 1; min-height: 0;
@@ -354,7 +405,7 @@
 <div id="app">
   <header>
     <div class="stat"><span class="lbl">Deck</span><span id="deckCount">–</span></div>
-    <div class="stat">🍺<span id="drinkCount">0</span></div>
+    <div class="stat" id="drinkStat" title="Your session drinks — tap to manage players" style="cursor:pointer">🍺<span id="drinkCount">0</span></div>
     <button id="modeBtn" title="Toggle camera Live mode">📷 Live</button>
     <button id="nateBtn" title="Nate mode: face-down deal, flip to play, triple win bonus">😎</button>
     <button id="wernerBtn" title="Wacky Werner: once you guess a pile you're stuck with it until it busts">🤪</button>
@@ -371,6 +422,7 @@
     </div>
   </div>
   <div id="liveStatus"></div>
+  <div id="turnStrip" hidden></div>
   <main id="grid"></main>
   <footer id="rules">▲/▼ on any live pile · wrong = drink the pile &amp; it dies · tie = drink, pile lives · Ace high</footer>
 </div>
@@ -384,6 +436,15 @@
   <div class="big"></div>
   <div class="sub"></div>
   <button id="again">New game</button>
+  <button id="editPlayers" class="alt">👥 Players</button>
+</div>
+
+<div id="playersOv">
+  <div class="big">👥 Players</div>
+  <div class="hint">pass-and-play · turns rotate after every guess</div>
+  <div id="plist"></div>
+  <button id="addPlayer">+ Add player</button>
+  <button id="playersDone">Deal 'em in</button>
 </div>
 
 <script id="engine">
@@ -405,11 +466,18 @@ const Engine = (() => {
     return deck;
   }
 
+  // Pass-and-play roster; solo defaults to a single anonymous player.
+  function mkPlayers(names) {
+    const list = names && names.length ? names : ['You'];
+    return list.slice(0, 8).map(n => ({ name: n, drinks: 0, score: 0 }));
+  }
+
   // nate=true deals every pile face-down: it must be flipped before it can be
   // played, and nothing about its card is shown until then.
   // werner=true is Wacky Werner: once you guess on a pile you're locked to it
   // until it busts (state.lock is the pile you're riding, -1 = free choice).
-  function newGame(rng, nate, werner) {
+  // names is the pass-and-play roster; turns rotate after every resolved guess.
+  function newGame(rng, nate, werner, names) {
     rng = rng || Math.random;
     const deck = fullDeck();
     for (let i = deck.length - 1; i > 0; i--) {
@@ -420,6 +488,7 @@ const Engine = (() => {
     for (let i = 0; i < PILES; i++) piles.push({ cards: [deck.pop()], alive: true, revealed: !nate });
     return { deck, piles, drinks: 0, over: false, reason: null,
              nate: !!nate, werner: !!werner, lock: -1,
+             players: mkPlayers(names), turn: 0,
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -526,6 +595,7 @@ const Engine = (() => {
   function resolve(state, i, dir, card, p) {
     const pile = state.piles[i];
     const top = pile.cards[pile.cards.length - 1];
+    const actor = state.turn; // whoever guessed drinks or scores, then passes
     pile.cards.push(card);
     const win = dir === 'higher' ? card.rank > top.rank : card.rank < top.rank;
     const tie = card.rank === top.rank;
@@ -537,9 +607,11 @@ const Engine = (() => {
       state.streak = { pile: i, n };
       pts = Math.round(100 * (1 - p) * pile.cards.length * (1 + 0.5 * (n - 1)));
       state.score += pts;
+      state.players[actor].score += pts;
     } else {
       sips = pile.cards.length; // sips to drink: the pile, drawn card included
       state.drinks++;           // the counter tracks drink events: busts + ties
+      state.players[actor].drinks++;
       if (!tie) pile.alive = false; // tie: drink and live
       state.streak = { pile: -1, n: 0 }; // tie or bust breaks the streak
     }
@@ -547,13 +619,15 @@ const Engine = (() => {
     else if (state.piles.every(pl => !pl.alive)) { state.over = true; state.reason = 'dead'; }
     if (state.over) {
       // untouched = never guessed on (every guess grows a pile past 1 card);
-      // winning blind (Nate mode) pays triple
+      // winning blind (Nate mode) pays triple. Bonuses credit whoever ended it.
       const untouched = state.piles.filter(pl => pl.cards.length === 1).length;
       state.bonus = { untouched: untouched * 75,
                       win: state.reason === 'deck' ? (state.nate ? 1500 : 500) : 0 };
       state.score += state.bonus.untouched + state.bonus.win;
+      state.players[actor].score += state.bonus.untouched + state.bonus.win;
     }
-    return { card, win, tie, sips, pts };
+    state.turn = (state.turn + 1) % state.players.length;
+    return { card, win, tie, sips, pts, player: actor };
   }
 
   function guess(state, i, dir) {
@@ -567,11 +641,12 @@ const Engine = (() => {
   }
 
   // ---- Live mode: a physical deck is the game; state.deck = cards not yet seen ----
-  function newLive() {
+  function newLive(names) {
     const piles = [];
     for (let i = 0; i < PILES; i++) piles.push({ cards: [], alive: true, revealed: true });
     return { live: true, phase: 'setup', deck: fullDeck(), piles,
              drinks: 0, over: false, reason: null, history: [],
+             players: mkPlayers(names), turn: 0,
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -579,6 +654,7 @@ const Engine = (() => {
     return JSON.parse(JSON.stringify({
       phase: state.phase, deck: state.deck, piles: state.piles,
       drinks: state.drinks, over: state.over, reason: state.reason,
+      players: state.players, turn: state.turn,
       score: state.score, streak: state.streak, bonus: state.bonus,
     }));
   }
@@ -997,14 +1073,17 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   let mode = 'play';                 // 'play' (virtual deck) | 'live' (camera)
   let nate = false;                  // face-down deal, no odds, triple win bonus
   let werner = false;                // stuck with a pile until it busts
+  let roster = ['You'];              // pass-and-play names; 1 = solo (no turn UI)
   let vState = Engine.newGame();
   let lState = null;
   let armed = null;                  // {pile, dir} awaiting a physical card (live)
-  let sessionDrinks = 0;             // survives New game, dies with the tab — by design
+  let sessionDrinks = {};            // per-name; survives New game, dies with the tab
   let locked = false;                // swallow taps while the drink toast is up
 
   const cur = () => (mode === 'live' ? lState : vState);
   const pct = (p) => Math.round(p * 100) + '%';
+  const esc = (s) => String(s).replace(/[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   function cardFace(pile, idx) {
     if (!pile.cards.length) return `<div class="card empty">${idx + 1}</div>`;
@@ -1056,8 +1135,18 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       }
       return `<div class="${cls}" data-i="${i}">${cardFace(pile, i)}${btns}</div>`;
     }).join('');
+    const curPlayer = state.players[state.turn];
     $('#deckCount').textContent = state.deck.length;
-    $('#drinkCount').textContent = sessionDrinks;
+    $('#drinkCount').textContent = sessionDrinks[curPlayer.name] || 0;
+    // turn strip only when it's actually a rotation (2+ players)
+    const ts = $('#turnStrip');
+    if (state.players.length > 1 && !state.over && !(mode === 'live' && state.phase === 'setup')) {
+      const nxt = state.players[(state.turn + 1) % state.players.length];
+      ts.hidden = false;
+      ts.innerHTML = `▶ <b>${esc(curPlayer.name)}</b> guesses <span class="nxt">· next: ${esc(nxt.name)}</span>`;
+    } else {
+      ts.hidden = true;
+    }
     // win = surviving until the deck runs out; progress = draw deck consumed
     if (setup) {
       const scanned = state.piles.filter(p => p.cards.length).length;
@@ -1082,7 +1171,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       wc.textContent = `win ${Math.round(p * 100)}%`;
       wc.className = p >= 0.5 ? 'good' : p >= 0.25 ? 'mid' : 'bad';
     }
-    $('#scoreChip').textContent = setup ? '' : `${state.score} pts`;
+    $('#scoreChip').textContent = setup ? '' : `${curPlayer.score} pts`;
     $('#cam').classList.toggle('compact', mode === 'live' && state.phase === 'play');
     renderLiveStatus();
   }
@@ -1092,18 +1181,20 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     if (mode !== 'live') { el.classList.remove('show'); return; }
     el.classList.add('show');
     const state = cur();
+    const who = state.players.length > 1 ? state.players[state.turn].name + ': ' : '';
     if (state.over) el.textContent = 'game over — Undo or New game';
     else if (state.phase === 'setup') el.textContent = '📷 lay the starting cards in view — it scans them all';
-    else if (armed) el.textContent = `${armed.dir === 'higher' ? '▲' : '▼'} armed on pile ${armed.pile + 1} — flip the card`;
-    else el.textContent = 'tap ▲/▼ on a pile, then flip the next card';
+    else if (armed) el.textContent = `${who}${armed.dir === 'higher' ? '▲' : '▼'} armed on pile ${armed.pile + 1} — flip the card`;
+    else el.textContent = `${who}tap ▲/▼ on a pile, then flip the next card`;
   }
 
-  function showToast(sips, tie) {
+  function showToast(sips, tie, name) {
     toast.classList.toggle('tie', !!tie);
     const img = $('#toastImg');
     img.src = ASSETS.lose;
     img.hidden = !!tie || !ASSETS.lose; // tongue on a real loss; tie is just yellow
-    toast.querySelector('.big').textContent = `DRINK ${sips} 🍺`;
+    toast.querySelector('.big').textContent =
+      name ? `${name.toUpperCase()} DRINKS ${sips} 🍺` : `DRINK ${sips} 🍺`;
     toast.querySelector('.sub').textContent = tie ? 'tie — you live' : 'pile is dead';
     toast.classList.add('show');
     locked = true;
@@ -1135,19 +1226,32 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
     const b = state.bonus || { untouched: 0, win: 0 };
     const bonusTxt = (b.untouched ? ` (+${b.untouched} untouched)` : '') + (b.win ? ` (+${b.win} clear)` : '');
-    $('#gameover .sub').innerHTML =
-      `Score: <b>${state.score}</b>${bonusTxt}<br>` +
-      `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>Session total: <b>${sessionDrinks}</b>`;
+    if (state.players.length > 1) {
+      // leaderboard: 🏆 top score, 🥴 biggest drinker
+      const ranked = state.players.slice().sort((x, y) => y.score - x.score);
+      const maxD = Math.max(...state.players.map(p => p.drinks));
+      $('#gameover .sub').innerHTML = ranked.map((p, k) =>
+        `${k === 0 ? '🏆 ' : ''}<b>${esc(p.name)}</b> — ${p.score} pts · ${p.drinks} 🍺` +
+        `${maxD > 0 && p.drinks === maxD ? ' 🥴' : ''}`).join('<br>') +
+        (bonusTxt ? `<br><span style="color:#9aa4b6">end bonuses${bonusTxt}</span>` : '');
+    } else {
+      $('#gameover .sub').innerHTML =
+        `Score: <b>${state.score}</b>${bonusTxt}<br>` +
+        `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>` +
+        `Session total: <b>${sessionDrinks[state.players[0].name] || 0}</b>`;
+    }
     $('#gameover').classList.add('show');
   }
 
   function applyResult(i, result) {
-    if (!result.win) sessionDrinks++;
+    const state = cur();
+    const actor = state.players[result.player];
+    if (!result.win) sessionDrinks[actor.name] = (sessionDrinks[actor.name] || 0) + 1;
     render(result.win ? { pile: i, win: true } : null);
     if (result.win) {
       setTimeout(() => { render(); maybeGameOver(); }, 450);
     } else {
-      showToast(result.sips, result.tie);
+      showToast(result.sips, result.tie, state.players.length > 1 ? actor.name : null);
     }
   }
 
@@ -1165,8 +1269,8 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   }
 
   function reset() {
-    if (mode === 'live') { lState = Engine.newLive(); armed = null; gate.frames = []; }
-    else vState = Engine.newGame(null, nate, werner);
+    if (mode === 'live') { lState = Engine.newLive(roster); armed = null; gate.frames = []; }
+    else vState = Engine.newGame(null, nate, werner, roster);
     $('#gameover').classList.remove('show');
     toast.classList.remove('show');
     locked = false;
@@ -1199,6 +1303,44 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     if (locked || mode !== 'play') return;
     if (Engine.flip(vState, i)) render();
   }
+
+  // ---- players editor (pass-and-play) ----
+  function openPlayers() {
+    $('#plist').innerHTML = roster.map((n) =>
+      `<div class="prow"><input maxlength="12" value="${esc(n)}"><button class="pdel">✕</button></div>`).join('');
+    $('#playersOv').classList.add('show');
+  }
+
+  function applyRoster(names) {
+    const seen = {};
+    roster = (names || []).map(n => String(n).trim()).filter(Boolean).slice(0, 8)
+      .map(n => { let m = n, k = 2; while (seen[m]) m = `${n} ${k++}`; seen[m] = 1; return m; });
+    if (!roster.length) roster = ['You'];
+    $('#playersOv').classList.remove('show');
+    reset(); // a new roster always deals a fresh game
+  }
+
+  $('#addPlayer').addEventListener('click', () => {
+    if ($('#plist').children.length >= 8) return;
+    const row = document.createElement('div');
+    row.className = 'prow';
+    row.innerHTML = '<input maxlength="12" value=""><button class="pdel">✕</button>';
+    $('#plist').appendChild(row);
+    row.querySelector('input').focus();
+  });
+  $('#plist').addEventListener('click', (e) => {
+    const del = e.target.closest('.pdel');
+    if (del && $('#plist').children.length > 1) del.closest('.prow').remove();
+  });
+  $('#playersDone').addEventListener('click', () => {
+    applyRoster([...$('#plist').querySelectorAll('input')].map(el => el.value));
+  });
+  $('#playersOv').addEventListener('click', (e) => {
+    if (e.target === $('#playersOv')) $('#playersOv').classList.remove('show'); // backdrop = cancel
+  });
+  $('#editPlayers').addEventListener('click', openPlayers);
+  $('#turnStrip').addEventListener('click', openPlayers);
+  $('#drinkStat').addEventListener('click', openPlayers);
 
   // ---- Live mode: camera + acceptance gate ----
   const video = $('#camVideo');
@@ -1330,9 +1472,12 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function undo() {
     if (mode !== 'live' || !lState) return;
-    const before = lState.drinks;
+    const before = lState.players.map(p => p.drinks);
     if (!Engine.liveUndo(lState)) return;
-    sessionDrinks = Math.max(0, sessionDrinks - (before - lState.drinks));
+    lState.players.forEach((p, k) => {
+      const d = before[k] - p.drinks;
+      if (d > 0) sessionDrinks[p.name] = Math.max(0, (sessionDrinks[p.name] || 0) - d);
+    });
     armed = null;
     gate.frames = [];
     $('#gameover').classList.remove('show');
@@ -1373,7 +1518,9 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   render();
   // test hooks
-  window.__game = { get state() { return vState; }, Engine, reset, onGuess };
+  window.__game = { get state() { return vState; }, Engine, reset, onGuess,
+                    setRoster: applyRoster, openPlayers,
+                    refresh: () => { render(); maybeGameOver(); } };
   window.__live = {
     get state() { return lState; }, get mode() { return mode; }, get armed() { return armed; },
     setMode, feed, accept, undo, processFrame, Vision,
