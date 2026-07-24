@@ -168,8 +168,17 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   await page.waitForTimeout(250);
   if (wst.alive) {
     if (wst.lock !== 0) fail('werner: surviving pile should hold the lock');
-    if ((await page.locator('.guess').count()) !== 2) fail('werner: only the locked pile keeps buttons');
-    if ((await page.locator('.guess[data-i="0"]').count()) !== 2) fail('werner: the locked pile is the playable one');
+    if ((await page.locator('.guess').count()) !== 18) fail('werner: every pile keeps its buttons visible');
+    if ((await page.locator('.guess.off[disabled]').count()) !== 16) fail('werner: other piles disabled while locked');
+    if ((await page.locator('.guess:not(.off)[data-i="0"]').count()) !== 2) fail('werner: the locked pile stays playable');
+    const offTxt = (await page.locator('.guess.off').first().textContent()).trim();
+    if (!/%/.test(offTxt)) fail('werner: locked-out buttons still show the odds: ' + offTxt);
+    const rejected = await page.evaluate(() => {
+      const before = window.__game.state.deck.length;
+      window.__game.onGuess(1, 'higher');
+      return window.__game.state.deck.length === before;
+    });
+    if (!rejected) fail('werner: guesses on locked-out piles must be rejected');
   } else if (wst.lock !== -1) {
     fail('werner: a bust should release the lock');
   }

@@ -217,6 +217,10 @@
   /* blind guess buttons (Nate mode): arrows only, no odds */
   .guess.blind .arrow { font-size: 26px; }
 
+  /* locked out by a Werner ride: odds stay readable, taps do nothing */
+  .guess.off { opacity: .4; }
+  .guess.off:active { transform: none; }
+
   /* empty slot during Live setup */
   .card.empty {
     background: transparent;
@@ -1027,14 +1031,16 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
                    isArmed ? 'armed' : '',
                    fx && fx.pile === i && fx.win ? 'won' : ''].join(' ');
       let btns = '';
+      // Werner: while you're riding another pile these buttons grey out —
+      // still showing their odds — and won't take a tap until yours busts
       const lockOut = state.werner && state.lock >= 0 && state.lock !== i;
-      if (lockOut) {
-        // Werner: you're riding another pile — no buttons here until it busts
-      } else if (!setup && pile.cards.length && pile.revealed && state.nate) {
+      const off = lockOut ? ' off' : '';
+      const dis = lockOut ? 'disabled' : '';
+      if (!setup && pile.cards.length && pile.revealed && state.nate) {
         // Nate mode: arrows only — odds or payouts would give the cards away
         btns = `<div class="btns">
-          <button class="guess blind" data-i="${i}" data-dir="higher"><span class="arrow">▲</span></button>
-          <button class="guess blind" data-i="${i}" data-dir="lower"><span class="arrow">▼</span></button>
+          <button class="guess blind${off}" ${dis} data-i="${i}" data-dir="higher"><span class="arrow">▲</span></button>
+          <button class="guess blind${off}" ${dis} data-i="${i}" data-dir="lower"><span class="arrow">▼</span></button>
         </div>`;
       } else if (!setup && pile.cards.length && pile.revealed) {
         const p = Engine.probs(state, i);
@@ -1042,9 +1048,9 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
         const sn = state.streak && state.streak.pile === i ? state.streak.n : 0;
         const pot = (prob) => Math.round(100 * (1 - prob) * (pile.cards.length + 1) * (1 + 0.5 * sn));
         btns = `<div class="btns">
-          <button class="guess ${isArmed && armed.dir === 'higher' ? 'armed' : isRec && !armed && rec.dir === 'higher' ? 'best' : ''}" data-i="${i}" data-dir="higher">
+          <button class="guess ${isArmed && armed.dir === 'higher' ? 'armed' : isRec && !armed && rec.dir === 'higher' ? 'best' : ''}${off}" ${dis} data-i="${i}" data-dir="higher">
             <span class="arrow">▲</span>${pct(p.higher)}<span class="pts">+${pot(p.higher)}</span></button>
-          <button class="guess ${isArmed && armed.dir === 'lower' ? 'armed' : isRec && !armed && rec.dir === 'lower' ? 'best' : ''}" data-i="${i}" data-dir="lower">
+          <button class="guess ${isArmed && armed.dir === 'lower' ? 'armed' : isRec && !armed && rec.dir === 'lower' ? 'best' : ''}${off}" ${dis} data-i="${i}" data-dir="lower">
             <span class="arrow">▼</span>${pct(p.lower)}<span class="pts">+${pot(p.lower)}</span></button>
         </div>`;
       }
