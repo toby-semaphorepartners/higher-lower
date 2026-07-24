@@ -325,7 +325,29 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
   assert(lv.stats.ties === 0, 'undo rolls the stats back');
 }
 
-// 14. winChance: Monte Carlo estimate of winning from the current position
+// 14. coin-flip recommendation on exact 50/50s
+{
+  const mk5050 = () => ({
+    // top 8 with {2..7} and {9..14} equally represented unseen: 3 below, 3 above
+    deck: [2, 3, 4, 12, 13, 14].map(r => ({ rank: r, suit: '♠' })),
+    piles: [{ cards: [{ rank: 8, suit: '♥' }], alive: true, revealed: true }],
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
+    players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0,
+    stats: { ties: 0, badBreaks: 0, closeWins: 0 },
+  });
+  const s = mk5050();
+  const r1 = Engine.recommend(s);
+  assert(r1.flip === true, '50/50 is flagged as a coin flip');
+  assert(r1.dir === 'higher' || r1.dir === 'lower', 'flip picks a real direction');
+  assert(Engine.recommend(s).dir === r1.dir, 'same position -> same flip (no flicker)');
+  // a lopsided pile is never a flip and still wins the argmax
+  const s2 = mk5050();
+  s2.piles.push({ cards: [{ rank: 2, suit: '♦' }], alive: true, revealed: true });
+  const r2 = Engine.recommend(s2);
+  assert(r2.pile === 1 && r2.dir === 'higher' && !r2.flip, 'lopsided pile recommended without a flip');
+}
+
+// 15. winChance: Monte Carlo estimate of winning from the current position
 {
   const mk = (tops, deckRanks) => ({
     deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),

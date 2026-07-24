@@ -130,6 +130,12 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   }
   if (endSt.stats.ties > 0 && !/tie/.test(sumTxt)) fail('summary should count ties: ' + sumTxt);
   if (endSt.stats.closeWins > 0 && !/close win/.test(sumTxt)) fail('summary should count close wins: ' + sumTxt);
+  // final board chips: one per pile, alive count matches the state
+  if ((await page.locator('#goBoard .gp').count()) !== 9) fail('final board should show 9 stacks');
+  const aliveN = await page.evaluate(() => window.__game.state.piles.filter(p => p.alive).length);
+  const chipAlive = await page.locator('#goBoard .gp:not(.dead)').count();
+  if (chipAlive !== aliveN) fail(`final board alive chips ${chipAlive} != ${aliveN}`);
+  if (aliveN > 0 && !/still standing/.test(sumTxt)) fail('summary should count standing stacks: ' + sumTxt);
   if (!(await page.locator('#shareBtn').count())) fail('share button missing');
   await page.locator('#shareBtn').click(); // must not crash (clipboard may be blocked headless)
   const scoreEnd = await page.textContent('#scoreChip');

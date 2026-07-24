@@ -208,6 +208,18 @@
   }
   #gameover .row { display: flex; gap: 10px; }
   #gameover .beats { font-size: 16px; color: #9aa4b6; }
+  #goBoard {
+    display: flex; flex-wrap: wrap; gap: 6px; justify-content: center;
+    max-width: 340px;
+  }
+  #goBoard .gp {
+    padding: 6px 9px;
+    border-radius: 9px;
+    background: #161b24; border: 1px solid #303a4a;
+    font-size: 14px; font-weight: 800;
+  }
+  #goBoard .gp.red { color: #ff6b74; }
+  #goBoard .gp.dead { color: #55617a; background: #10141c; }
   #bestBadge { font-size: 17px; font-weight: 800; color: #9aa4b6; }
   #bestBadge.new { font-size: 22px; font-weight: 900; color: #ffc53d; }
 
@@ -476,6 +488,7 @@
   <div class="big"></div>
   <div id="bestBadge" hidden></div>
   <div class="sub"></div>
+  <div id="goBoard"></div>
   <button id="again">New game</button>
   <div class="row">
     <button id="editPlayers" class="alt">👥 Players</button>
@@ -595,13 +608,17 @@ const Engine = (() => {
         if (lock >= 0) { // Werner: the ridden pile is the only legal play
           bi = lock;
           const t = tops[bi];
-          bdir = left - below[t + 1] >= below[t] ? 1 : -1;
+          const lo = below[t], hi = left - below[t + 1];
+          bdir = hi === lo ? (rng() < 0.5 ? 1 : -1) : (hi > lo ? 1 : -1);
         } else {
           for (let i = 0; i < alive; i++) {
             const t = tops[i];
             const lo = below[t], hi = left - below[t + 1];
             const w = hi >= lo ? hi : lo;
-            if (w > bw) { bw = w; bi = i; bdir = hi >= lo ? 1 : -1; }
+            if (w > bw) {
+              bw = w; bi = i;
+              bdir = hi === lo ? (rng() < 0.5 ? 1 : -1) : (hi > lo ? 1 : -1); // coin-flip ties
+            }
           }
         }
         let pick = (rng() * left) | 0, r = 1;
@@ -621,15 +638,24 @@ const Engine = (() => {
   // Best (pile, direction) across live piles; null when none playable.
   // Face-down piles are excluded — there is nothing to recommend about them —
   // and a Werner lock narrows the choice to the pile you're riding.
+  // An exact 50/50 gets a genuine coin flip (flip: true) instead of always
+  // defaulting to higher; the flip is hashed from the position so it's stable
+  // across re-renders but lands differently game to game.
   function recommend(state) {
     let best = null;
+    let h = 2166136261 ^ state.deck.length;
+    for (const pl of state.piles) {
+      if (pl.cards.length) h = Math.imul(h, 16777619) ^ pl.cards[pl.cards.length - 1].rank;
+    }
+    const coin = (i) => ((h >>> (i % 28)) & 1) === 1;
     state.piles.forEach((pile, i) => {
       if (!pile.alive || pile.revealed === false) return;
       if (state.werner && state.lock >= 0 && state.lock !== i) return;
       const p = probs(state, i);
-      const dir = p.higher >= p.lower ? 'higher' : 'lower';
+      const flip = p.higher === p.lower;
+      const dir = flip ? (coin(i) ? 'higher' : 'lower') : (p.higher > p.lower ? 'higher' : 'lower');
       const win = Math.max(p.higher, p.lower);
-      if (!best || win > best.p) best = { pile: i, dir, p: win };
+      if (!best || win > best.p) best = { pile: i, dir, p: win, flip };
     });
     return best;
   }
@@ -1269,11 +1295,13 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
         // potential payout preview: odds × height-after-win × live streak bonus
         const sn = state.streak && state.streak.pile === i ? state.streak.n : 0;
         const pot = (prob) => Math.round(100 * (1 - prob) * (pile.cards.length + 1) * (1 + 0.5 * sn));
+        // an exact 50/50 recommendation is an honest coin flip — mark it 🪙
+        const coin = (d) => isRec && !armed && rec.flip && rec.dir === d ? '🪙' : '';
         btns = `<div class="btns">
           <button class="guess ${isArmed && armed.dir === 'higher' ? 'armed' : isRec && !armed && rec.dir === 'higher' ? 'best' : ''}${off}" ${dis} data-i="${i}" data-dir="higher">
-            <span class="arrow">▲</span>${pct(p.higher)}<span class="pts">+${pot(p.higher)}</span></button>
+            <span class="arrow">${coin('higher')}▲</span>${pct(p.higher)}<span class="pts">+${pot(p.higher)}</span></button>
           <button class="guess ${isArmed && armed.dir === 'lower' ? 'armed' : isRec && !armed && rec.dir === 'lower' ? 'best' : ''}${off}" ${dis} data-i="${i}" data-dir="lower">
-            <span class="arrow">▼</span>${pct(p.lower)}<span class="pts">+${pot(p.lower)}</span></button>
+            <span class="arrow">${coin('lower')}▼</span>${pct(p.lower)}<span class="pts">+${pot(p.lower)}</span></button>
         </div>`;
       }
       return `<div class="${cls}" data-i="${i}">${cardFace(pile, i)}${btns}</div>`;
@@ -1396,7 +1424,17 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     if (s.badBreaks) beats.push(`💔 ${n(s.badBreaks, 'bad break')}`);
     let statsTxt = '';
     if (!win) statsTxt += `<br><b>${n(state.deck.length, 'card')}</b> from victory`;
+    const standing = state.piles.filter(pl => pl.alive && pl.cards.length).length;
+    if (standing) statsTxt += `<br>🂠 ${n(standing, 'stack')} still standing`;
     if (beats.length) statsTxt += `<br><span class="beats">${beats.join(' · ')}</span>`;
+    // the final board: every stack as it ended (face-down piles get revealed —
+    // the game is over, seeing what you never flipped is part of the story)
+    $('#goBoard').innerHTML = state.piles.map(pl => {
+      if (!pl.cards.length) return '<span class="gp dead">·</span>';
+      if (!pl.alive) return '<span class="gp dead">✕</span>';
+      const top = pl.cards[pl.cards.length - 1];
+      return `<span class="gp${Engine.RED[top.suit] ? ' red' : ''}">${Engine.label(top.rank)}${top.suit}×${pl.cards.length}</span>`;
+    }).join('');
     if (state.players.length > 1) {
       // leaderboard: 🏆 top score, 🥴 biggest drinker
       const ranked = state.players.slice().sort((x, y) => y.score - x.score);
