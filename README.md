@@ -2,7 +2,8 @@
 
 A one-page multi-pile higher/lower drinking game. Dark, high-contrast, built for
 one-handed use outdoors at night. Single self-contained HTML file — no build, no
-dependencies, no backend, no tracking; all state is in-memory (refresh = fresh game).
+dependencies, no backend, no tracking. Game state is in-memory (refresh = fresh
+game); only best scores and the mute setting persist on your device.
 
 ## Play
 
@@ -10,6 +11,9 @@ Open `index.html` in any browser. That's the whole install.
 
 For phone use, host the file anywhere HTTPS (camera access requires a secure
 context) — or just open it locally for the on-screen game.
+
+🔊 (bottom-right) toggles sound and vibration — every effect is synthesized
+in-page, no audio files.
 
 ## Rules
 
@@ -24,6 +28,15 @@ context) — or just open it locally for the on-screen game.
 - The 🍺 counter counts drinking events — piles lost plus ties — not total sips.
 - The corner of the progress bar shows your live chance of winning the game,
   estimated by replaying the rest of the deck from the current position.
+
+## 👥 Pass-and-play
+
+Tap the 🍺 chip (or the turn strip, or 👥 on the game-over screen) to add up to
+8 named players. Turns rotate automatically after every guess; the turn strip
+shows who's up and who's next, the drink toast names who drinks, and the
+game-over screen becomes a leaderboard — 🏆 top score, 🥴 biggest drinker. In
+Wacky Werner the stuck pile passes to the next player; in Nate mode flipping a
+pile is free. Changing the roster deals a fresh game. Solo play is unchanged.
 
 ## 😎 Nate mode
 
@@ -49,7 +62,8 @@ risking) and a streak bonus of +50% per consecutive win on the same pile. Each
 ▲/▼ button shows its potential payout next to the odds, and your score sits in
 the left corner of the progress bar. At the end, untouched piles pay +75 each and
 clearing the deck adds +500 (+1500 in Nate mode). Ties and busts score nothing
-(and break the streak).
+(and break the streak). Your device remembers the best score per mode combo —
+beat it for the NEW BEST 🎉 badge — and 📤 Share posts your result anywhere.
 
 ## 📷 Live mode — count a real deck
 

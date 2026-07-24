@@ -190,7 +190,8 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
   // guaranteed win pays zero; end-of-game bonuses land on top
   const st = { deck: [{ rank: 14, suit: '♠' }],
     piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true })),
-    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null };
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
+    players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0 };
   const rr = Engine.guess(st, 0, 'higher'); // p = 1: the sure thing pays nothing
   assert(rr.win && rr.pts === 0, 'sure thing pays 0');
   assert(st.over && st.reason === 'deck', 'deck exhausted ends the game');
@@ -214,7 +215,8 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
   // clearing the deck blind pays the tripled bonus
   const tiny = { deck: [{ rank: 14, suit: '♠' }], nate: true,
     piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true, revealed: true })),
-    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null };
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
+    players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0 };
   Engine.guess(tiny, 0, 'higher');
   assert(tiny.over && tiny.bonus.win === 1500, 'nate victory bonus is 1500');
 }
@@ -226,6 +228,7 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
     piles: [{ cards: [{ rank: 7, suit: '♥' }], alive: true, revealed: true },
             { cards: [{ rank: 7, suit: '♦' }], alive: true, revealed: true }],
     drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
+    players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0,
   });
   const fresh = Engine.newGame(makeRng(21), false, true);
   assert(fresh.werner === true && fresh.lock === -1, 'werner deal starts unlocked');
@@ -250,7 +253,38 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
   assert(Engine.guess(nrm, 1, 'higher') !== null, 'normal mode switches piles');
 }
 
-// 12. winChance: Monte Carlo estimate of winning from the current position
+// 12. multiplayer: turns rotate, tallies land on the actor, undo restores turns
+{
+  const st = Engine.newGame(makeRng(8), false, false, ['A', 'B', 'C']);
+  assert(st.players.length === 3 && st.turn === 0, '3 players, A starts');
+  assert(st.players.every(p => p.drinks === 0 && p.score === 0), 'zeroed tallies');
+  const solo = Engine.newGame(makeRng(8));
+  assert(solo.players.length === 1 && solo.players[0].name === 'You', 'solo default roster');
+  const r1 = Engine.guess(st, 0, 'higher');
+  assert(r1.player === 0 && st.turn === 1, 'first guess is player 0, then the turn passes');
+  const r2 = Engine.guess(st, 1, 'higher');
+  assert(r2.player === 1 && st.turn === 2, 'second guess is player 1');
+  Engine.guess(st, 2, 'higher');
+  assert(st.turn === 0, 'turn wraps around');
+  const totScore = st.players.reduce((n, p) => n + p.score, 0);
+  const totDrinks = st.players.reduce((n, p) => n + p.drinks, 0);
+  assert(totScore === st.score && totDrinks === st.drinks, 'player tallies sum to the game totals');
+  // nate flip is free — no turn advance
+  const nat = Engine.newGame(makeRng(4), true, false, ['A', 'B']);
+  Engine.flip(nat, 0);
+  assert(nat.turn === 0, 'flip does not consume a turn');
+  // live mode: setup scans are free; undo hands the turn back with the drinks
+  const lv = Engine.newLive(['A', 'B']);
+  [[14, '♠'], [2, '♥'], [7, '♦'], [7, '♣'], [11, '♠'], [12, '♥'], [13, '♦'], [3, '♣'], [9, '♠']]
+    .forEach(([r, s]) => Engine.liveSetup(lv, r, s));
+  assert(lv.turn === 0, 'setup scans do not consume turns');
+  Engine.liveResolve(lv, 0, 'higher', 13, '♥'); // A busts pile 0 (top A♠)
+  assert(lv.turn === 1 && lv.players[0].drinks === 1, 'A drank, B is up');
+  Engine.liveUndo(lv);
+  assert(lv.turn === 0 && lv.players[0].drinks === 0, 'undo restores the turn and the tally');
+}
+
+// 13. winChance: Monte Carlo estimate of winning from the current position
 {
   const mk = (tops, deckRanks) => ({
     deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),

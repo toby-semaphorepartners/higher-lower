@@ -118,6 +118,10 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if (!/^win (100|0)%$/.test(wcEnd)) fail('terminal win chance should be 0/100: ' + wcEnd);
   const goSub = await page.textContent('#gameover .sub');
   if (!/Score: \d+/.test(goSub)) fail('game over should show the final score: ' + goSub);
+  const badge = await page.textContent('#bestBadge');
+  if (!/best/i.test(badge)) fail('best-score badge missing: ' + badge);
+  if (!(await page.locator('#shareBtn').count())) fail('share button missing');
+  await page.locator('#shareBtn').click(); // must not crash (clipboard may be blocked headless)
   const scoreEnd = await page.textContent('#scoreChip');
   if (!/^\d+ pts$/.test(scoreEnd)) fail('score chip should show a number: ' + scoreEnd);
   await page.screenshot({ path: SCRATCH + '/shot-5-gameover.png' });
@@ -187,6 +191,103 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   await page.locator('#wernerBtn').click(); // back to normal
   await page.waitForTimeout(200);
   if ((await page.locator('.guess').count()) !== 18) fail('werner off: free pile choice returns');
+
+  // Streak flame: shows on the hot pile once a win streak starts
+  const streakN = await page.evaluate(() => {
+    const g = window.__game;
+    let guard = 0;
+    while (g.state.streak.n < 1 && !g.state.over && guard++ < 50) {
+      const rec = g.Engine.recommend(g.state);
+      g.Engine.guess(g.state, rec.pile, rec.dir);
+    }
+    g.refresh();
+    return g.state.over ? 0 : g.state.streak.n;
+  });
+  if (streakN >= 1 && !(await page.locator('.flame').count())) fail('streak flame missing');
+  if (!(await page.locator('#confetti').count())) fail('confetti canvas missing');
+  await page.evaluate(() => window.__game.reset());
+  await page.waitForTimeout(150);
+
+  // Sound: mute toggle exists and persists
+  const mLbl = await page.textContent('#muteBtn');
+  if (!/🔊|🔇/.test(mLbl)) fail('mute button missing: ' + mLbl);
+  await page.locator('#muteBtn').click();
+  const mutedStored = await page.evaluate(() => {
+    try { return localStorage.getItem('hl.muted'); } catch (_) { return 'blocked'; }
+  });
+  if (mutedStored !== '1' && mutedStored !== 'blocked') fail('mute state should persist: ' + mutedStored);
+  if ((await page.textContent('#muteBtn')) !== '🔇') fail('mute button should show muted state');
+  await page.locator('#muteBtn').click(); // back on
+
+  // Multiplayer: editor, turn strip, named toast, leaderboard
+  await page.locator('#drinkStat').click();
+  if (!(await page.locator('#playersOv.show').count())) fail('players editor should open from the 🍺 chip');
+  await page.locator('#addPlayer').click();
+  await page.locator('#plist input').nth(1).fill('Werner');
+  await page.locator('#playersDone').click();
+  await page.waitForTimeout(200);
+  let names = await page.evaluate(() => window.__game.state.players.map(p => p.name));
+  if (JSON.stringify(names) !== JSON.stringify(['You', 'Werner'])) fail('editor roster wrong: ' + names);
+
+  await page.evaluate(() => window.__game.setRoster(['Toby', 'Nate']));
+  await page.waitForTimeout(200);
+  if ((await page.locator('#turnStrip:not([hidden])').count()) !== 1) fail('multi: turn strip should show');
+  let strip = await page.textContent('#turnStrip');
+  if (!/Toby/.test(strip) || !/Nate/.test(strip)) fail('multi: strip should name current and next: ' + strip);
+  await page.evaluate(() => window.__game.onGuess(0, 'higher'));
+  await page.waitForTimeout(250);
+  strip = await page.textContent('#turnStrip');
+  if (!/▶ Nate/.test(strip)) fail('multi: the turn should pass to Nate: ' + strip);
+
+  // hunt a loss to see the named drink toast
+  let namedToast = false;
+  for (let k = 0; k < 30 && !namedToast; k++) {
+    const alive = await page.evaluate(() => {
+      const s = window.__game.state;
+      if (s.over) return false;
+      let bi = -1, bd = null, bp = 2;
+      s.piles.forEach((pile, i) => {
+        if (!pile.alive) return;
+        const p = window.__game.Engine.probs(s, i);
+        if (p.higher < bp) { bp = p.higher; bi = i; bd = 'higher'; }
+        if (p.lower < bp) { bp = p.lower; bi = i; bd = 'lower'; }
+      });
+      window.__game.onGuess(bi, bd);
+      return true;
+    });
+    if (!alive) break;
+    await page.waitForTimeout(150);
+    if (await page.locator('#toast.show').count()) {
+      const big = await page.textContent('#toast .big');
+      if (!/(TOBY|NATE) DRINKS \d+/.test(big)) fail('multi: toast should name the drinker: ' + big);
+      namedToast = true;
+      await page.screenshot({ path: SCRATCH + '/shot-9-multi-toast.png' });
+    }
+    await page.waitForTimeout(1400);
+  }
+  if (!namedToast) fail('multi: never saw a named drink toast');
+
+  // drive to game over at engine speed and check the leaderboard
+  await page.evaluate(() => {
+    const g = window.__game;
+    let guard = 0;
+    while (!g.state.over && guard++ < 300) {
+      const rec = g.Engine.recommend(g.state);
+      if (!rec) break;
+      g.Engine.guess(g.state, rec.pile, rec.dir);
+    }
+    g.refresh();
+  });
+  await page.waitForTimeout(300);
+  if (!(await page.locator('#gameover.show').count())) fail('multi: game over should show');
+  const lb = await page.textContent('#gameover .sub');
+  if (!/🏆/.test(lb) || !/(Toby|Nate)/.test(lb)) fail('multi: expected a leaderboard: ' + lb);
+  await page.screenshot({ path: SCRATCH + '/shot-10-leaderboard.png' });
+
+  // back to solo: strip hides, UI matches the classic game
+  await page.evaluate(() => window.__game.setRoster(['You']));
+  await page.waitForTimeout(200);
+  if ((await page.locator('#turnStrip:not([hidden])').count()) !== 0) fail('solo: turn strip must hide');
 
   if (errors.length) fail('console errors: ' + errors.join(' | '));
   console.log(process.exitCode ? 'UI TESTS FAILED' : 'all UI checks passed');

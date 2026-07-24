@@ -156,6 +156,60 @@
   }
   #liveStatus.show { display: block; }
 
+  /* ---- turn strip (2+ players) ---- */
+  #turnStrip {
+    margin: 0 4px 8px;
+    padding: 10px 12px;
+    border-radius: 12px;
+    background: #161b24; border: 1px solid #29303d;
+    font-size: 15px; font-weight: 800;
+    text-align: center;
+    cursor: pointer;
+  }
+  #turnStrip b { color: #ffc53d; }
+  #turnStrip .nxt { color: #9aa4b6; }
+
+  /* ---- players editor ---- */
+  #playersOv {
+    position: fixed; inset: 0; z-index: 40;
+    display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    background: rgba(11, 14, 20, .96);
+    padding: 24px;
+  }
+  #playersOv.show { display: flex; }
+  #playersOv .big { font-size: 30px; font-weight: 900; }
+  #playersOv .hint { font-size: 14px; font-weight: 700; color: #9aa4b6; }
+  #plist { display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 320px; }
+  .prow { display: flex; gap: 8px; }
+  .prow input {
+    flex: 1; min-width: 0;
+    min-height: 48px; padding: 8px 12px;
+    font: inherit; font-size: 17px; font-weight: 700; color: #f2f4f8;
+    background: #161b24; border: 1px solid #303a4a; border-radius: 12px;
+    -webkit-user-select: text; user-select: text;
+  }
+  .prow button, #addPlayer {
+    min-width: 48px; min-height: 48px; padding: 8px 14px;
+    font: inherit; font-size: 17px; font-weight: 800; color: #f2f4f8;
+    background: #1e2530; border: 1px solid #303a4a; border-radius: 12px;
+    cursor: pointer;
+  }
+  #playersDone {
+    min-height: 56px; padding: 12px 36px;
+    font: inherit; font-size: 20px; font-weight: 900; color: #0b0e14;
+    background: #ffc53d; border: none; border-radius: 16px;
+    cursor: pointer;
+  }
+  #playersDone:active, #addPlayer:active { transform: scale(.96); }
+  #gameover button.alt {
+    background: #1e2530; color: #f2f4f8; border: 1px solid #303a4a;
+    font-size: 18px; min-height: 52px; padding: 10px 24px;
+  }
+  #gameover .row { display: flex; gap: 10px; }
+  #bestBadge { font-size: 17px; font-weight: 800; color: #9aa4b6; }
+  #bestBadge.new { font-size: 22px; font-weight: 900; color: #ffc53d; }
+
   /* ---- grid ---- */
   #grid {
     flex: 1; min-height: 0;
@@ -255,6 +309,28 @@
     50%      { box-shadow: 0 0 0 3px #ffc53d, 0 0 26px 8px rgba(255,197,61,.85); }
   }
   .pile.rec .card { animation: pulse 1.2s ease-in-out infinite; }
+
+  /* landing card flip + pile-death shake (guarded for reduced motion) */
+  @media (prefers-reduced-motion: no-preference) {
+    @keyframes flipin { from { transform: rotateY(88deg); } to { transform: rotateY(0); } }
+    @keyframes shake {
+      0%, 100% { transform: translateX(0); }
+      20% { transform: translateX(-6px) rotate(-2deg); }
+      40% { transform: translateX(5px) rotate(2deg); }
+      60% { transform: translateX(-4px); }
+      80% { transform: translateX(3px); }
+    }
+    .pile.landed .card { animation: flipin .35s ease-out; }
+    .pile.rec.landed .card { animation: flipin .35s ease-out, pulse 1.2s ease-in-out .35s infinite; }
+    .pile.died .card { animation: shake .45s ease-in; }
+  }
+
+  /* streak flame: grows with the multiplier */
+  .card .flame {
+    position: absolute; left: 6px; bottom: 4px;
+    font-weight: 900; color: #ff9d2e; line-height: 1;
+    text-shadow: 0 1px 2px rgba(0,0,0,.6);
+  }
   .pile.armed .card { box-shadow: 0 0 0 3px #2196c9, 0 0 18px 4px rgba(33,150,201,.7); animation: none; }
 
   /* dead pile */
@@ -278,10 +354,20 @@
 
   /* ---- footer rules line ---- */
   footer {
-    padding: 4px 4px 8px;
+    padding: 4px 48px 8px;
     font-size: 13px; font-weight: 700; color: #9aa4b6;
     text-align: center;
   }
+  #muteBtn {
+    position: fixed; right: 10px; bottom: calc(env(safe-area-inset-bottom) + 8px);
+    z-index: 10;
+    width: 42px; height: 42px;
+    font-size: 18px;
+    background: rgba(22, 27, 36, .9); border: 1px solid #303a4a; border-radius: 50%;
+    color: #f2f4f8; cursor: pointer;
+  }
+  #muteBtn.muted { opacity: .5; }
+  #muteBtn:active { transform: scale(.94); }
 
   /* ---- drink toast ---- */
   #toast {
@@ -326,6 +412,7 @@
     text-align: center; padding: 24px;
   }
   #gameover.show { display: flex; }
+  #confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   #gameover img {
     max-width: 78vw; max-height: 38vh;
     border-radius: 16px;
@@ -354,7 +441,7 @@
 <div id="app">
   <header>
     <div class="stat"><span class="lbl">Deck</span><span id="deckCount">–</span></div>
-    <div class="stat">🍺<span id="drinkCount">0</span></div>
+    <div class="stat" id="drinkStat" title="Your session drinks — tap to manage players" style="cursor:pointer">🍺<span id="drinkCount">0</span></div>
     <button id="modeBtn" title="Toggle camera Live mode">📷 Live</button>
     <button id="nateBtn" title="Nate mode: face-down deal, flip to play, triple win bonus">😎</button>
     <button id="wernerBtn" title="Wacky Werner: once you guess a pile you're stuck with it until it busts">🤪</button>
@@ -371,19 +458,36 @@
     </div>
   </div>
   <div id="liveStatus"></div>
+  <div id="turnStrip" hidden></div>
   <main id="grid"></main>
   <footer id="rules">▲/▼ on any live pile · wrong = drink the pile &amp; it dies · tie = drink, pile lives · Ace high</footer>
 </div>
+
+<button id="muteBtn" title="Sound &amp; vibration">🔊</button>
 
 <div id="readFlash"></div>
 <div id="toast"><img id="toastImg" alt="" hidden><div class="big"></div><div class="sub"></div></div>
 
 <div id="gameover">
+  <canvas id="confetti"></canvas>
   <img id="goImg" alt="" hidden>
   <div class="cap" id="goCap" hidden></div>
   <div class="big"></div>
+  <div id="bestBadge" hidden></div>
   <div class="sub"></div>
   <button id="again">New game</button>
+  <div class="row">
+    <button id="editPlayers" class="alt">👥 Players</button>
+    <button id="shareBtn" class="alt">📤 Share</button>
+  </div>
+</div>
+
+<div id="playersOv">
+  <div class="big">👥 Players</div>
+  <div class="hint">pass-and-play · turns rotate after every guess</div>
+  <div id="plist"></div>
+  <button id="addPlayer">+ Add player</button>
+  <button id="playersDone">Deal 'em in</button>
 </div>
 
 <script id="engine">
@@ -405,11 +509,18 @@ const Engine = (() => {
     return deck;
   }
 
+  // Pass-and-play roster; solo defaults to a single anonymous player.
+  function mkPlayers(names) {
+    const list = names && names.length ? names : ['You'];
+    return list.slice(0, 8).map(n => ({ name: n, drinks: 0, score: 0 }));
+  }
+
   // nate=true deals every pile face-down: it must be flipped before it can be
   // played, and nothing about its card is shown until then.
   // werner=true is Wacky Werner: once you guess on a pile you're locked to it
   // until it busts (state.lock is the pile you're riding, -1 = free choice).
-  function newGame(rng, nate, werner) {
+  // names is the pass-and-play roster; turns rotate after every resolved guess.
+  function newGame(rng, nate, werner, names) {
     rng = rng || Math.random;
     const deck = fullDeck();
     for (let i = deck.length - 1; i > 0; i--) {
@@ -420,6 +531,7 @@ const Engine = (() => {
     for (let i = 0; i < PILES; i++) piles.push({ cards: [deck.pop()], alive: true, revealed: !nate });
     return { deck, piles, drinks: 0, over: false, reason: null,
              nate: !!nate, werner: !!werner, lock: -1,
+             players: mkPlayers(names), turn: 0,
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -526,6 +638,7 @@ const Engine = (() => {
   function resolve(state, i, dir, card, p) {
     const pile = state.piles[i];
     const top = pile.cards[pile.cards.length - 1];
+    const actor = state.turn; // whoever guessed drinks or scores, then passes
     pile.cards.push(card);
     const win = dir === 'higher' ? card.rank > top.rank : card.rank < top.rank;
     const tie = card.rank === top.rank;
@@ -537,9 +650,11 @@ const Engine = (() => {
       state.streak = { pile: i, n };
       pts = Math.round(100 * (1 - p) * pile.cards.length * (1 + 0.5 * (n - 1)));
       state.score += pts;
+      state.players[actor].score += pts;
     } else {
       sips = pile.cards.length; // sips to drink: the pile, drawn card included
       state.drinks++;           // the counter tracks drink events: busts + ties
+      state.players[actor].drinks++;
       if (!tie) pile.alive = false; // tie: drink and live
       state.streak = { pile: -1, n: 0 }; // tie or bust breaks the streak
     }
@@ -547,13 +662,15 @@ const Engine = (() => {
     else if (state.piles.every(pl => !pl.alive)) { state.over = true; state.reason = 'dead'; }
     if (state.over) {
       // untouched = never guessed on (every guess grows a pile past 1 card);
-      // winning blind (Nate mode) pays triple
+      // winning blind (Nate mode) pays triple. Bonuses credit whoever ended it.
       const untouched = state.piles.filter(pl => pl.cards.length === 1).length;
       state.bonus = { untouched: untouched * 75,
                       win: state.reason === 'deck' ? (state.nate ? 1500 : 500) : 0 };
       state.score += state.bonus.untouched + state.bonus.win;
+      state.players[actor].score += state.bonus.untouched + state.bonus.win;
     }
-    return { card, win, tie, sips, pts };
+    state.turn = (state.turn + 1) % state.players.length;
+    return { card, win, tie, sips, pts, player: actor };
   }
 
   function guess(state, i, dir) {
@@ -567,11 +684,12 @@ const Engine = (() => {
   }
 
   // ---- Live mode: a physical deck is the game; state.deck = cards not yet seen ----
-  function newLive() {
+  function newLive(names) {
     const piles = [];
     for (let i = 0; i < PILES; i++) piles.push({ cards: [], alive: true, revealed: true });
     return { live: true, phase: 'setup', deck: fullDeck(), piles,
              drinks: 0, over: false, reason: null, history: [],
+             players: mkPlayers(names), turn: 0,
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -579,6 +697,7 @@ const Engine = (() => {
     return JSON.parse(JSON.stringify({
       phase: state.phase, deck: state.deck, piles: state.piles,
       drinks: state.drinks, over: state.over, reason: state.reason,
+      players: state.players, turn: state.turn,
       score: state.score, streak: state.streak, bonus: state.bonus,
     }));
   }
@@ -997,14 +1116,91 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   let mode = 'play';                 // 'play' (virtual deck) | 'live' (camera)
   let nate = false;                  // face-down deal, no odds, triple win bonus
   let werner = false;                // stuck with a pile until it busts
+  let roster = ['You'];              // pass-and-play names; 1 = solo (no turn UI)
   let vState = Engine.newGame();
   let lState = null;
   let armed = null;                  // {pile, dir} awaiting a physical card (live)
-  let sessionDrinks = 0;             // survives New game, dies with the tab — by design
+  let sessionDrinks = {};            // per-name; survives New game, dies with the tab
   let locked = false;                // swallow taps while the drink toast is up
+
+  // ---- sound & haptics: everything synthesized, no audio assets ----
+  const Sfx = (() => {
+    let ctx = null, muted = false;
+    try { muted = localStorage.getItem('hl.muted') === '1'; } catch (_) {}
+    function ac() { // lazily created inside user-gesture call stacks (autoplay rules)
+      if (!ctx) {
+        const AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        ctx = new AC();
+      }
+      if (ctx.state === 'suspended') ctx.resume().catch(() => {});
+      return ctx;
+    }
+    function tone(freq, t0, dur, type, gain) {
+      const c = ac();
+      if (!c) return;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = type;
+      o.frequency.value = freq;
+      const at = c.currentTime + t0;
+      g.gain.setValueAtTime(0.0001, at);
+      g.gain.exponentialRampToValueAtTime(gain, at + 0.015);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + dur);
+      o.connect(g).connect(c.destination);
+      o.start(at); o.stop(at + dur + 0.05);
+    }
+    const buzz = (p) => { if (navigator.vibrate) try { navigator.vibrate(p); } catch (_) {} };
+    return {
+      get muted() { return muted; },
+      toggle() {
+        muted = !muted;
+        try { localStorage.setItem('hl.muted', muted ? '1' : '0'); } catch (_) {}
+        return muted;
+      },
+      win(streak) { // ding that climbs with the streak
+        if (!muted) {
+          const f = 660 * Math.pow(1.12, Math.min(streak || 1, 8) - 1);
+          tone(f, 0, 0.12, 'triangle', 0.15);
+          tone(f * 1.5, 0.07, 0.15, 'triangle', 0.12);
+        }
+        buzz(30);
+      },
+      bust() {
+        if (!muted) { tone(220, 0, 0.25, 'sawtooth', 0.2); tone(150, 0.12, 0.35, 'sawtooth', 0.2); }
+        buzz([400]);
+      },
+      tie() {
+        if (!muted) { tone(330, 0, 0.12, 'square', 0.12); tone(330, 0.16, 0.12, 'square', 0.12); }
+        buzz([80, 60, 80]);
+      },
+      fanfare() {
+        if (!muted) [523, 659, 784, 1047].forEach((f, k) => tone(f, k * 0.12, 0.22, 'triangle', 0.16));
+        buzz([60, 40, 60, 40, 120]);
+      },
+      flip() { if (!muted) tone(880, 0, 0.05, 'square', 0.06); },
+    };
+  })();
 
   const cur = () => (mode === 'live' ? lState : vState);
   const pct = (p) => Math.round(p * 100) + '%';
+  const SITE = 'https://toby-semaphorepartners.github.io/higher-lower/';
+
+  // ---- device-local best scores, keyed by mode combo ----
+  const modeKey = (state) => state.live ? 'live'
+    : [state.nate ? 'nate' : '', state.werner ? 'werner' : ''].filter(Boolean).join('+') || 'normal';
+  const Best = {
+    load() { try { return JSON.parse(localStorage.getItem('hl.best')) || {}; } catch (_) { return {}; } },
+    get(k) { return Best.load()[k] || 0; },
+    set(k, v) {
+      try {
+        const m = Best.load();
+        m[k] = v;
+        localStorage.setItem('hl.best', JSON.stringify(m));
+      } catch (_) {}
+    },
+  };
+  const esc = (s) => String(s).replace(/[&<>"']/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
   function cardFace(pile, idx) {
     if (!pile.cards.length) return `<div class="card empty">${idx + 1}</div>`;
@@ -1012,10 +1208,16 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const top = pile.cards[pile.cards.length - 1];
     const color = Engine.RED[top.suit] ? 'red' : 'blk';
     const height = pile.cards.length >= 3 ? 'h3' : 'h' + pile.cards.length;
+    // streak flame: this pile is hot — shows the multiplier the next win pays
+    const st = cur();
+    const flame = pile.alive && st.streak && st.streak.pile === idx && st.streak.n > 0
+      ? `<div class="flame" style="font-size:${13 + Math.min(st.streak.n, 6) * 2}px">🔥×${(1 + 0.5 * st.streak.n).toFixed(1).replace(/\.0$/, '')}</div>`
+      : '';
     return `<div class="card ${color} ${height}">
       <div class="corner">${Engine.label(top.rank)}<br>${top.suit}</div>
       <div class="pip">${top.suit}</div>
       ${pile.alive ? '' : '<div class="x">✕</div>'}
+      ${flame}
       <div class="count">×${pile.cards.length}</div>
     </div>`;
   }
@@ -1029,7 +1231,9 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       const isArmed = armed && armed.pile === i;
       const cls = ['pile', pile.alive ? '' : 'dead', isRec && !armed ? 'rec' : '',
                    isArmed ? 'armed' : '',
-                   fx && fx.pile === i && fx.win ? 'won' : ''].join(' ');
+                   fx && fx.pile === i && fx.win ? 'won' : '',
+                   fx && fx.pile === i && fx.anim && !fx.dead ? 'landed' : '',
+                   fx && fx.pile === i && fx.dead ? 'died' : ''].join(' ');
       let btns = '';
       // Werner: while you're riding another pile these buttons grey out —
       // still showing their odds — and won't take a tap until yours busts
@@ -1056,8 +1260,18 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       }
       return `<div class="${cls}" data-i="${i}">${cardFace(pile, i)}${btns}</div>`;
     }).join('');
+    const curPlayer = state.players[state.turn];
     $('#deckCount').textContent = state.deck.length;
-    $('#drinkCount').textContent = sessionDrinks;
+    $('#drinkCount').textContent = sessionDrinks[curPlayer.name] || 0;
+    // turn strip only when it's actually a rotation (2+ players)
+    const ts = $('#turnStrip');
+    if (state.players.length > 1 && !state.over && !(mode === 'live' && state.phase === 'setup')) {
+      const nxt = state.players[(state.turn + 1) % state.players.length];
+      ts.hidden = false;
+      ts.innerHTML = `▶ <b>${esc(curPlayer.name)}</b> guesses <span class="nxt">· next: ${esc(nxt.name)}</span>`;
+    } else {
+      ts.hidden = true;
+    }
     // win = surviving until the deck runs out; progress = draw deck consumed
     if (setup) {
       const scanned = state.piles.filter(p => p.cards.length).length;
@@ -1082,7 +1296,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       wc.textContent = `win ${Math.round(p * 100)}%`;
       wc.className = p >= 0.5 ? 'good' : p >= 0.25 ? 'mid' : 'bad';
     }
-    $('#scoreChip').textContent = setup ? '' : `${state.score} pts`;
+    $('#scoreChip').textContent = setup ? '' : `${curPlayer.score} pts`;
     $('#cam').classList.toggle('compact', mode === 'live' && state.phase === 'play');
     renderLiveStatus();
   }
@@ -1092,18 +1306,20 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     if (mode !== 'live') { el.classList.remove('show'); return; }
     el.classList.add('show');
     const state = cur();
+    const who = state.players.length > 1 ? state.players[state.turn].name + ': ' : '';
     if (state.over) el.textContent = 'game over — Undo or New game';
     else if (state.phase === 'setup') el.textContent = '📷 lay the starting cards in view — it scans them all';
-    else if (armed) el.textContent = `${armed.dir === 'higher' ? '▲' : '▼'} armed on pile ${armed.pile + 1} — flip the card`;
-    else el.textContent = 'tap ▲/▼ on a pile, then flip the next card';
+    else if (armed) el.textContent = `${who}${armed.dir === 'higher' ? '▲' : '▼'} armed on pile ${armed.pile + 1} — flip the card`;
+    else el.textContent = `${who}tap ▲/▼ on a pile, then flip the next card`;
   }
 
-  function showToast(sips, tie) {
+  function showToast(sips, tie, name) {
     toast.classList.toggle('tie', !!tie);
     const img = $('#toastImg');
     img.src = ASSETS.lose;
     img.hidden = !!tie || !ASSETS.lose; // tongue on a real loss; tie is just yellow
-    toast.querySelector('.big').textContent = `DRINK ${sips} 🍺`;
+    toast.querySelector('.big').textContent =
+      name ? `${name.toUpperCase()} DRINKS ${sips} 🍺` : `DRINK ${sips} 🍺`;
     toast.querySelector('.sub').textContent = tie ? 'tie — you live' : 'pile is dead';
     toast.classList.add('show');
     locked = true;
@@ -1128,6 +1344,23 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const state = cur();
     if (!state.over) return;
     const win = state.reason === 'deck';
+    const already = $('#gameover').classList.contains('show');
+    if (win && !already) Sfx.fanfare();
+    if (win && !already) setTimeout(confetti, 60); // after the overlay lays out
+    if (!already) {
+      // best score for this mode combo — the table's top player sets the mark
+      const k = modeKey(state);
+      const top = Math.max(...state.players.map(p => p.score));
+      const prev = Best.get(k);
+      const isNew = top > prev;
+      if (isNew) Best.set(k, top);
+      const bb = $('#bestBadge');
+      bb.hidden = false;
+      bb.classList.toggle('new', isNew);
+      bb.textContent = isNew
+        ? `NEW BEST 🎉 ${top} pts${prev ? ` (was ${prev})` : ''}`
+        : `best${k === 'normal' ? '' : ' ' + k} score: ${prev} pts`;
+    }
     $('#goImg').src = win ? ASSETS.win : ASSETS.lose;
     $('#goImg').hidden = !(win ? ASSETS.win : ASSETS.lose);
     $('#goCap').textContent = 'Chillin';
@@ -1135,19 +1368,35 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
     const b = state.bonus || { untouched: 0, win: 0 };
     const bonusTxt = (b.untouched ? ` (+${b.untouched} untouched)` : '') + (b.win ? ` (+${b.win} clear)` : '');
-    $('#gameover .sub').innerHTML =
-      `Score: <b>${state.score}</b>${bonusTxt}<br>` +
-      `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>Session total: <b>${sessionDrinks}</b>`;
+    if (state.players.length > 1) {
+      // leaderboard: 🏆 top score, 🥴 biggest drinker
+      const ranked = state.players.slice().sort((x, y) => y.score - x.score);
+      const maxD = Math.max(...state.players.map(p => p.drinks));
+      $('#gameover .sub').innerHTML = ranked.map((p, k) =>
+        `${k === 0 ? '🏆 ' : ''}<b>${esc(p.name)}</b> — ${p.score} pts · ${p.drinks} 🍺` +
+        `${maxD > 0 && p.drinks === maxD ? ' 🥴' : ''}`).join('<br>') +
+        (bonusTxt ? `<br><span style="color:#9aa4b6">end bonuses${bonusTxt}</span>` : '');
+    } else {
+      $('#gameover .sub').innerHTML =
+        `Score: <b>${state.score}</b>${bonusTxt}<br>` +
+        `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>` +
+        `Session total: <b>${sessionDrinks[state.players[0].name] || 0}</b>`;
+    }
     $('#gameover').classList.add('show');
   }
 
   function applyResult(i, result) {
-    if (!result.win) sessionDrinks++;
-    render(result.win ? { pile: i, win: true } : null);
+    const state = cur();
+    const actor = state.players[result.player];
+    if (!result.win) sessionDrinks[actor.name] = (sessionDrinks[actor.name] || 0) + 1;
+    if (result.win) Sfx.win(state.streak.n);
+    else if (result.tie) Sfx.tie();
+    else Sfx.bust();
+    render({ pile: i, win: result.win, anim: true, dead: !result.win && !result.tie });
     if (result.win) {
       setTimeout(() => { render(); maybeGameOver(); }, 450);
     } else {
-      showToast(result.sips, result.tie);
+      showToast(result.sips, result.tie, state.players.length > 1 ? actor.name : null);
     }
   }
 
@@ -1165,8 +1414,8 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   }
 
   function reset() {
-    if (mode === 'live') { lState = Engine.newLive(); armed = null; gate.frames = []; }
-    else vState = Engine.newGame(null, nate, werner);
+    if (mode === 'live') { lState = Engine.newLive(roster); armed = null; gate.frames = []; }
+    else vState = Engine.newGame(null, nate, werner, roster);
     $('#gameover').classList.remove('show');
     toast.classList.remove('show');
     locked = false;
@@ -1197,8 +1446,107 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function onFlip(i) {
     if (locked || mode !== 'play') return;
-    if (Engine.flip(vState, i)) render();
+    if (Engine.flip(vState, i)) { Sfx.flip(); render({ pile: i, anim: true }); }
   }
+
+  // ---- players editor (pass-and-play) ----
+  function openPlayers() {
+    $('#plist').innerHTML = roster.map((n) =>
+      `<div class="prow"><input maxlength="12" value="${esc(n)}"><button class="pdel">✕</button></div>`).join('');
+    $('#playersOv').classList.add('show');
+  }
+
+  function applyRoster(names) {
+    const seen = {};
+    roster = (names || []).map(n => String(n).trim()).filter(Boolean).slice(0, 8)
+      .map(n => { let m = n, k = 2; while (seen[m]) m = `${n} ${k++}`; seen[m] = 1; return m; });
+    if (!roster.length) roster = ['You'];
+    $('#playersOv').classList.remove('show');
+    reset(); // a new roster always deals a fresh game
+  }
+
+  $('#addPlayer').addEventListener('click', () => {
+    if ($('#plist').children.length >= 8) return;
+    const row = document.createElement('div');
+    row.className = 'prow';
+    row.innerHTML = '<input maxlength="12" value=""><button class="pdel">✕</button>';
+    $('#plist').appendChild(row);
+    row.querySelector('input').focus();
+  });
+  $('#plist').addEventListener('click', (e) => {
+    const del = e.target.closest('.pdel');
+    if (del && $('#plist').children.length > 1) del.closest('.prow').remove();
+  });
+  $('#playersDone').addEventListener('click', () => {
+    applyRoster([...$('#plist').querySelectorAll('input')].map(el => el.value));
+  });
+  $('#playersOv').addEventListener('click', (e) => {
+    if (e.target === $('#playersOv')) $('#playersOv').classList.remove('show'); // backdrop = cancel
+  });
+  $('#editPlayers').addEventListener('click', openPlayers);
+  $('#turnStrip').addEventListener('click', openPlayers);
+  $('#drinkStat').addEventListener('click', openPlayers);
+
+  // ---- victory confetti: pure canvas, ~2.5s, no libs ----
+  function confetti() {
+    if (matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const c = $('#confetti');
+    c.width = c.clientWidth; c.height = c.clientHeight;
+    const ctx = c.getContext('2d');
+    const COLORS = ['#ffc53d', '#3ddc84', '#7fd6ff', '#ff6b74', '#f2f4f8'];
+    const parts = Array.from({ length: 80 }, () => ({
+      x: Math.random() * c.width, y: -20 - Math.random() * c.height * 0.3,
+      vx: (Math.random() - 0.5) * 2.4, vy: 2 + Math.random() * 3,
+      s: 5 + Math.random() * 6, r: Math.random() * Math.PI, vr: (Math.random() - 0.5) * 0.3,
+      col: COLORS[(Math.random() * COLORS.length) | 0],
+    }));
+    const t0 = performance.now();
+    (function tick(t) {
+      ctx.clearRect(0, 0, c.width, c.height);
+      for (const p of parts) {
+        p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        ctx.save();
+        ctx.translate(p.x, p.y);
+        ctx.rotate(p.r);
+        ctx.fillStyle = p.col;
+        ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s * 0.6);
+        ctx.restore();
+      }
+      if (t - t0 < 2600 && $('#gameover').classList.contains('show')) requestAnimationFrame(tick);
+      else ctx.clearRect(0, 0, c.width, c.height);
+    })(t0);
+  }
+
+  // ---- share the result (Web Share API, clipboard fallback) ----
+  function shareText() {
+    const state = cur();
+    const k = modeKey(state);
+    const tag = { nate: '😎 Nate mode', werner: '🤪 Werner mode',
+                  'nate+werner': '😎🤪 Nate + Werner', live: '📷 live deck' }[k] || '';
+    const top = state.players.slice().sort((a, b) => b.score - a.score)[0];
+    const who = state.players.length > 1 ? `${top.name}: ` : '';
+    const end = state.reason === 'deck' ? 'deck cleared 🎉' : 'all piles dead 💀';
+    return `🍺 Higher/Lower — ${who}${top.score} pts · ${state.drinks} drinks · ${end}` +
+           `${tag ? ' · ' + tag : ''}\n${SITE}`;
+  }
+  $('#shareBtn').addEventListener('click', () => {
+    const text = shareText();
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        $('#shareBtn').textContent = '✅ Copied';
+        setTimeout(() => { $('#shareBtn').textContent = '📤 Share'; }, 1500);
+      }).catch(() => {});
+    }
+  });
+
+  function paintMute() {
+    $('#muteBtn').textContent = Sfx.muted ? '🔇' : '🔊';
+    $('#muteBtn').classList.toggle('muted', Sfx.muted);
+  }
+  $('#muteBtn').addEventListener('click', () => { Sfx.toggle(); paintMute(); });
+  paintMute();
 
   // ---- Live mode: camera + acceptance gate ----
   const video = $('#camVideo');
@@ -1330,9 +1678,12 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   function undo() {
     if (mode !== 'live' || !lState) return;
-    const before = lState.drinks;
+    const before = lState.players.map(p => p.drinks);
     if (!Engine.liveUndo(lState)) return;
-    sessionDrinks = Math.max(0, sessionDrinks - (before - lState.drinks));
+    lState.players.forEach((p, k) => {
+      const d = before[k] - p.drinks;
+      if (d > 0) sessionDrinks[p.name] = Math.max(0, (sessionDrinks[p.name] || 0) - d);
+    });
     armed = null;
     gate.frames = [];
     $('#gameover').classList.remove('show');
@@ -1373,7 +1724,9 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   render();
   // test hooks
-  window.__game = { get state() { return vState; }, Engine, reset, onGuess };
+  window.__game = { get state() { return vState; }, Engine, reset, onGuess,
+                    setRoster: applyRoster, openPlayers,
+                    refresh: () => { render(); maybeGameOver(); } };
   window.__live = {
     get state() { return lState; }, get mode() { return mode; }, get armed() { return armed; },
     setMode, feed, accept, undo, processFrame, Vision,
