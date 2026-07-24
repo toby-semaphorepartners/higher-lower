@@ -1,0 +1,1101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#0b0e14">
+<title>Higher / Lower</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { height: 100%; }
+  body {
+    background: #0b0e14;
+    color: #f2f4f8;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overflow: hidden;
+  }
+  #app {
+    height: 100dvh;
+    max-width: 540px;
+    margin: 0 auto;
+    display: flex; flex-direction: column;
+    padding: env(safe-area-inset-top) 8px env(safe-area-inset-bottom);
+  }
+
+  /* ---- header ---- */
+  header {
+    display: flex; align-items: center; gap: 6px;
+    padding: 10px 4px;
+    font-size: 20px; font-weight: 800;
+  }
+  .stat {
+    display: flex; align-items: center; gap: 5px;
+    background: #161b24; border: 1px solid #29303d;
+    border-radius: 14px; padding: 8px 10px;
+    min-height: 48px;
+  }
+  .stat .lbl { font-size: 13px; font-weight: 700; color: #9aa4b6; text-transform: uppercase; letter-spacing: .06em; }
+  #modeBtn {
+    min-height: 48px; padding: 8px 12px;
+    font: inherit; font-size: 17px; font-weight: 800; color: #f2f4f8;
+    background: #161b24; border: 1px solid #29303d; border-radius: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #modeBtn.live { background: #103042; border-color: #2196c9; color: #7fd6ff; }
+  #newgame {
+    margin-left: auto;
+    min-height: 48px; padding: 8px 16px;
+    font: inherit; font-size: 17px; font-weight: 800; color: #0b0e14;
+    background: #f2f4f8; border: none; border-radius: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #newgame:active, #modeBtn:active { transform: scale(.96); }
+
+  /* ---- win progress ---- */
+  #progress {
+    position: relative;
+    height: 26px;
+    background: #161b24; border: 1px solid #29303d;
+    border-radius: 13px;
+    margin: 0 4px 8px;
+    overflow: hidden;
+  }
+  #progressFill {
+    position: absolute; inset: 0 auto 0 0;
+    width: 0%;
+    background: linear-gradient(90deg, #2f6f4f, #3ddc84);
+    transition: width .35s;
+  }
+  #progressLbl {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 900; color: #ffffff;
+    text-shadow: 0 1px 1px rgba(0,0,0,.7);
+  }
+
+  /* ---- camera strip (Live mode) ---- */
+  #cam {
+    position: relative;
+    height: 148px;
+    margin: 0 4px 8px;
+    border-radius: 14px;
+    background: #000;
+    border: 1px solid #29303d;
+    overflow: hidden;
+    display: none;
+    transition: height .3s;
+  }
+  #cam.show { display: block; }
+  #cam.compact { height: 96px; } /* setup done — give the grid its space back */
+  #camVideo, #camOverlay {
+    position: absolute; inset: 0;
+    width: 100%; height: 100%;
+  }
+  #camVideo { object-fit: cover; }
+  #camMsg {
+    position: absolute; inset: 0;
+    display: none;
+    align-items: center; justify-content: center;
+    padding: 12px; text-align: center;
+    font-size: 15px; font-weight: 700; color: #f2f4f8;
+    background: #161b24;
+  }
+  #camMsg.show { display: flex; }
+  .camBtns {
+    position: absolute; right: 6px; bottom: 6px;
+    display: flex; gap: 6px;
+  }
+  .camBtns button {
+    min-height: 44px; min-width: 44px; padding: 6px 14px;
+    font: inherit; font-size: 16px; font-weight: 800; color: #f2f4f8;
+    background: rgba(22, 27, 36, .85); border: 1px solid #303a4a; border-radius: 12px;
+    cursor: pointer;
+  }
+  .camBtns button:active { transform: scale(.96); }
+  #liveStatus {
+    display: none;
+    margin: 0 4px 8px;
+    padding: 8px 12px;
+    border-radius: 12px;
+    background: #103042; border: 1px solid #2196c9;
+    font-size: 15px; font-weight: 800; color: #aee6ff;
+    text-align: center;
+  }
+  #liveStatus.show { display: block; }
+
+  /* ---- grid ---- */
+  #grid {
+    flex: 1; min-height: 0;
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: repeat(3, 1fr);
+    gap: 8px;
+    padding: 2px 0 6px;
+  }
+  .pile {
+    display: flex; flex-direction: column; gap: 5px;
+    min-height: 0;
+    border-radius: 16px;
+  }
+
+  /* card */
+  .card {
+    flex: 1; min-height: 56px;
+    position: relative;
+    background: #f7f3e8;
+    border-radius: 12px;
+    box-shadow: 0 2px 0 #29303d;
+    display: flex; align-items: center; justify-content: center;
+    transition: box-shadow .25s;
+  }
+  .card .corner {
+    position: absolute; top: 5px; left: 8px;
+    font-size: 19px; font-weight: 800; line-height: 1;
+    text-align: center;
+  }
+  .card .pip { font-size: 44px; line-height: 1; }
+  .card.red .corner, .card.red .pip { color: #c1121f; }
+  .card.blk .corner, .card.blk .pip { color: #14181f; }
+  .card .count {
+    position: absolute; right: 6px; bottom: 5px;
+    font-size: 13px; font-weight: 800; color: #f7f3e8;
+    background: #14181f;
+    border-radius: 9px; padding: 2px 7px;
+  }
+  /* stack-depth hint */
+  .card::before, .card::after {
+    content: ""; position: absolute; left: 3px; right: 3px;
+    height: 3px; background: #d8d2c2; border-radius: 2px;
+  }
+  .card::before { bottom: -4px; }
+  .card::after  { bottom: -8px; opacity: .5; }
+  .card.h1::before, .card.h1::after { display: none; }
+  .card.h2::after { display: none; }
+
+  /* empty slot during Live setup */
+  .card.empty {
+    background: transparent;
+    border: 2px dashed #303a4a;
+    box-shadow: none;
+    color: #55617a;
+    font-size: 26px; font-weight: 900;
+  }
+  .card.empty::before, .card.empty::after { display: none; }
+
+  /* guess buttons */
+  .btns { display: flex; flex-direction: column; gap: 5px; }
+  .guess {
+    min-height: 52px;
+    display: flex; align-items: center; justify-content: center; gap: 8px;
+    font: inherit; font-size: 19px; font-weight: 900; color: #ffffff;
+    background: #1e2530; border: 1px solid #303a4a; border-radius: 12px;
+    cursor: pointer;
+  }
+  .guess:active { transform: scale(.96); }
+  .guess .arrow { font-size: 16px; }
+  .guess.best {
+    background: #ffc53d; border-color: #ffc53d; color: #14181f;
+  }
+  .guess.armed {
+    background: #2196c9; border-color: #7fd6ff; color: #04141d;
+  }
+
+  /* recommended pile pulse */
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 2px #ffc53d, 0 0 10px 2px rgba(255,197,61,.55); }
+    50%      { box-shadow: 0 0 0 3px #ffc53d, 0 0 26px 8px rgba(255,197,61,.85); }
+  }
+  .pile.rec .card { animation: pulse 1.2s ease-in-out infinite; }
+  .pile.armed .card { box-shadow: 0 0 0 3px #2196c9, 0 0 18px 4px rgba(33,150,201,.7); animation: none; }
+
+  /* dead pile */
+  .pile.dead .card {
+    background: #171c25;
+    box-shadow: none;
+  }
+  .pile.dead .card::before, .pile.dead .card::after { background: #232a36; }
+  .pile.dead .card .corner { color: #4a5468; }
+  .pile.dead .card .pip { visibility: hidden; }
+  .pile.dead .card .count { background: #232a36; color: #6b7689; }
+  .pile.dead .card .x {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 40px; font-weight: 800; color: #55617a;
+  }
+  .pile.dead .btns { visibility: hidden; }
+
+  /* win flash */
+  .pile.won .card { box-shadow: 0 0 0 3px #3ddc84, 0 0 22px 4px rgba(61,220,132,.8); }
+
+  /* ---- footer rules line ---- */
+  footer {
+    padding: 4px 4px 8px;
+    font-size: 13px; font-weight: 700; color: #9aa4b6;
+    text-align: center;
+  }
+
+  /* ---- drink toast ---- */
+  #toast {
+    position: fixed; inset: 0; z-index: 20;
+    display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 10px;
+    background: rgba(178, 16, 32, .94);
+    text-align: center;
+  }
+  #toast.show { display: flex; }
+  #toast .big { font-size: 64px; font-weight: 900; letter-spacing: .01em; }
+  #toast .sub { font-size: 22px; font-weight: 700; }
+
+  /* card-read flash (Live mode) */
+  #readFlash {
+    position: fixed; left: 50%; top: 18%; z-index: 15;
+    transform: translateX(-50%);
+    display: none;
+    padding: 10px 22px;
+    border-radius: 16px;
+    background: #103042; border: 2px solid #7fd6ff;
+    font-size: 30px; font-weight: 900; color: #ffffff;
+    white-space: nowrap; max-width: 94vw; overflow: hidden;
+  }
+  #readFlash.show { display: block; }
+  #readFlash .red { color: #ff6b74; }
+
+  /* ---- game over ---- */
+  #gameover {
+    position: fixed; inset: 0; z-index: 30;
+    display: none;
+    align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+    background: rgba(11, 14, 20, .96);
+    text-align: center; padding: 24px;
+  }
+  #gameover.show { display: flex; }
+  #gameover .big { font-size: 40px; font-weight: 900; }
+  #gameover .sub { font-size: 20px; font-weight: 700; color: #aeb7c6; line-height: 1.6; }
+  #gameover button {
+    min-height: 64px; padding: 14px 40px;
+    font: inherit; font-size: 24px; font-weight: 900; color: #0b0e14;
+    background: #ffc53d; border: none; border-radius: 18px;
+    cursor: pointer;
+  }
+  #gameover button:active { transform: scale(.96); }
+
+  @media (max-height: 700px) {
+    .card .pip { font-size: 32px; }
+    .guess { min-height: 44px; font-size: 17px; }
+    header { font-size: 19px; }
+    #cam { height: 110px; }
+  }
+</style>
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="stat"><span class="lbl">Deck</span><span id="deckCount">–</span></div>
+    <div class="stat">🍺<span id="drinkCount">0</span></div>
+    <button id="modeBtn" title="Toggle camera Live mode">📷 Live</button>
+    <button id="newgame">New</button>
+  </header>
+  <div id="progress"><div id="progressFill"></div><span id="progressLbl"></span></div>
+  <div id="cam">
+    <video id="camVideo" playsinline muted></video>
+    <canvas id="camOverlay"></canvas>
+    <div id="camMsg"></div>
+    <div class="camBtns">
+      <button id="torchBtn" hidden>🔦</button>
+      <button id="undoBtn">↩ Undo</button>
+    </div>
+  </div>
+  <div id="liveStatus"></div>
+  <main id="grid"></main>
+  <footer id="rules">▲/▼ on any live pile · wrong = drink the pile &amp; it dies · tie = drink, pile lives · Ace high</footer>
+</div>
+
+<div id="readFlash"></div>
+<div id="toast"><div class="big"></div><div class="sub"></div></div>
+
+<div id="gameover">
+  <div class="big"></div>
+  <div class="sub"></div>
+  <button id="again">New game</button>
+</div>
+
+<script id="engine">
+// Pure game engine — no DOM. Kept DOM-free so it can be evaluated under Node for tests.
+const Engine = (() => {
+  const SUITS = ['♠', '♥', '♦', '♣'];
+  const RED = { '♥': true, '♦': true };
+  const LABELS = { 11: 'J', 12: 'Q', 13: 'K', 14: 'A' };
+  const PILES = 9;
+
+  function label(rank) { return LABELS[rank] || String(rank); }
+  function key(card) { return label(card.rank) + card.suit; }
+
+  function fullDeck() {
+    const deck = [];
+    for (const suit of SUITS) {
+      for (let rank = 2; rank <= 14; rank++) deck.push({ rank, suit });
+    }
+    return deck;
+  }
+
+  function newGame(rng) {
+    rng = rng || Math.random;
+    const deck = fullDeck();
+    for (let i = deck.length - 1; i > 0; i--) {
+      const j = Math.floor(rng() * (i + 1));
+      [deck[i], deck[j]] = [deck[j], deck[i]];
+    }
+    const piles = [];
+    for (let i = 0; i < PILES; i++) piles.push({ cards: [deck.pop()], alive: true });
+    return { deck, piles, drinks: 0, over: false, reason: null };
+  }
+
+  // Exact clean-win odds from the remaining deck's known composition.
+  // Ties excluded from both: a tie still costs a drink (but the pile survives).
+  // Works for both modes — in Live mode state.deck is the not-yet-seen multiset.
+  function probs(state, i) {
+    const top = state.piles[i].cards[state.piles[i].cards.length - 1];
+    let higher = 0, lower = 0;
+    for (const c of state.deck) {
+      if (c.rank > top.rank) higher++;
+      else if (c.rank < top.rank) lower++;
+    }
+    const n = state.deck.length || 1;
+    return { higher: higher / n, lower: lower / n };
+  }
+
+  // Best (pile, direction) across live piles; null when none playable.
+  function recommend(state) {
+    let best = null;
+    state.piles.forEach((pile, i) => {
+      if (!pile.alive) return;
+      const p = probs(state, i);
+      const dir = p.higher >= p.lower ? 'higher' : 'lower';
+      const win = Math.max(p.higher, p.lower);
+      if (!best || win > best.p) best = { pile: i, dir, p: win };
+    });
+    return best;
+  }
+
+  // Shared win/tie/loss application: the card is already off the deck.
+  function resolve(state, pile, dir, card) {
+    const top = pile.cards[pile.cards.length - 1];
+    pile.cards.push(card);
+    const win = dir === 'higher' ? card.rank > top.rank : card.rank < top.rank;
+    const tie = card.rank === top.rank;
+    let sips = 0;
+    if (!win) {
+      sips = pile.cards.length; // drink the pile, drawn card included
+      state.drinks += sips;
+      if (!tie) pile.alive = false; // tie: drink and live
+    }
+    if (state.deck.length === 0) { state.over = true; state.reason = 'deck'; }
+    else if (state.piles.every(p => !p.alive)) { state.over = true; state.reason = 'dead'; }
+    return { card, win, tie, sips };
+  }
+
+  function guess(state, i, dir) {
+    const pile = state.piles[i];
+    if (state.over || !pile.alive || state.deck.length === 0) return null;
+    return resolve(state, pile, dir, state.deck.pop());
+  }
+
+  // ---- Live mode: a physical deck is the game; state.deck = cards not yet seen ----
+  function newLive() {
+    const piles = [];
+    for (let i = 0; i < PILES; i++) piles.push({ cards: [], alive: true });
+    return { live: true, phase: 'setup', deck: fullDeck(), piles,
+             drinks: 0, over: false, reason: null, history: [] };
+  }
+
+  function snap(state) {
+    return JSON.parse(JSON.stringify({
+      phase: state.phase, deck: state.deck, piles: state.piles,
+      drinks: state.drinks, over: state.over, reason: state.reason,
+    }));
+  }
+
+  function takeCard(state, rank, suit) {
+    const i = state.deck.findIndex(c => c.rank === rank && c.suit === suit);
+    return i < 0 ? null : state.deck.splice(i, 1)[0];
+  }
+
+  // Scan one of the 9 starting cards. {dup:true} = that card was already seen.
+  function liveSetup(state, rank, suit) {
+    if (state.phase !== 'setup') return null;
+    if (!state.deck.some(c => c.rank === rank && c.suit === suit)) return { dup: true };
+    state.history.push(snap(state));
+    const card = takeCard(state, rank, suit);
+    const i = state.piles.findIndex(p => p.cards.length === 0);
+    state.piles[i].cards.push(card);
+    if (i === PILES - 1) state.phase = 'play';
+    return { pile: i, card, done: state.phase === 'play' };
+  }
+
+  // A physically flipped card resolves the armed guess on pile i.
+  function liveResolve(state, i, dir, rank, suit) {
+    if (state.phase !== 'play' || state.over || !state.piles[i].alive) return null;
+    if (!state.deck.some(c => c.rank === rank && c.suit === suit)) return { dup: true };
+    state.history.push(snap(state));
+    return resolve(state, state.piles[i], dir, takeCard(state, rank, suit));
+  }
+
+  // Revert the last accepted card entirely (misread recovery).
+  function liveUndo(state) {
+    const s = state.history.pop();
+    if (!s) return false;
+    Object.assign(state, s);
+    return true;
+  }
+
+  return { newGame, probs, recommend, guess,
+           newLive, liveSetup, liveResolve, liveUndo,
+           label, key, fullDeck, RED, SUITS };
+})();
+if (typeof module !== 'undefined') module.exports = { Engine };
+</script>
+
+<script id="vision">
+// Pure image math — no DOM. Frames come in as {data,width,height} (RGBA), the same
+// shape as ImageData, so everything here is unit-testable under Node.
+const Vision = (() => {
+  const CW = 200, CH = 280;       // canonical warped card size
+  const GW = 16, GH = 24;         // normalized glyph grid
+  // Rank/suit bit templates (GWxGH bits, hex). Baked from canvas-rendered glyphs in
+  // bold sans/serif/condensed — regenerated via the template-gen harness (see
+  // docs/state note for this branch); replace wholesale, never hand-edit.
+  const TEMPLATES = {"ranks":{"2":["07e01ffc3ffe7ffe7e3f7c1ff81f001f001f003e007e00fc01fc03f807e00fc01f803f007e007c00ffffffffffffffff","07e01ffc3ffe7ffe7e3f7c1ff81f001f001f003e007e00fc01fc03f807e00fc01f803f007e007c00ffffffffffffffff","3ff07ff8707c603e603e603e003e003e003e003e007c007c00f801f001e003c007001e003c007800ffffffffffffffff"],"3":["07e01ff83ffc3ffe7e3e781ef81e001e001e007e03fc03f803f803fe003e001f000ff80ff81f7c1f7ffe3ffe1ffc0ff0","07e01ff83ffc3ffe7e3e781ef81e001e001e007e03fc03f803f803fe003e001f000ff80ff81f7c1f7ffe3ffe1ffc0ff0","7ff07ff870fc607e607e603e003e003e007e00fc07f80fe007fc007e003f001f001f001fc01fc01fe03fe07efffc7ff0"],"4":["007800f801f801f803f803f807b807380f381e381e383c38383878387038f07cffffffffffff007c0038003800380038","007800f801f801f803f803f807b807380f381e381e383c38383878387038f07cffffffffffff007c0038003800380038","003c007c007c00fc01fc01fc03fc037c067c0e7c0c7c187c187c307c707c707cffffffffffff007c007c007c007c007c"],"5":["3ffe7ffe7ffe7ffe7c007c007800780079f07ff87ffc7ffe7e7e781f001f001f000f001ff81ffc3e7ffe7ffc3ff80ff0","3ffe7ffe7ffe7ffe7c007c007800780079f07ff87ffc7ffe7e7e781f001f001f000f001ff81ffc3e7ffe7ffc3ff80ff0","7ffe7ffe7ffe7ffe7000700070007000700070007ff07ffc207e003f003f001f001f001fc01fc03fe03fe07efffc7ff0"],"6":["03e00ff81ffc3ffe3e3e7c1e7c007800f800fbf8fffcfffeff7efc1ffc1ff81ff81f781f7c1f7c3f3ffe3ffe1ffc07f0","03e00ff81ffc3ffe3e3e7c1e7c007800f800fbf8fffcfffeff7efc1ffc1ff81ff81f781f7c1f7c3f3ffe3ffe1ffc07f0","03fc0ffe1f0e3e0e3e067c067c00fc00fc00fc00fff8fffef83efc3ffc1ffc1ffc1ffc1f7c1f7c1f3c3e3e3e1ffc07f0"],"7":["ffffffffffffffff000f001e003e007c007800f800f001f001e003e003e007c007c00fc00f800f800f800f800f800f80","ffffffffffffffff000f001e003e007c007800f800f001f001e003e003e007c007c00fc00f800f800f800f800f800f80","ffffffffffffffffe00ec00ec01c001c003800380070007000f000e001e003c003c0038007800f800f001f001e003e00"],"8":["07e01ff83ffc7ffe7c3e7c1ff81f781f7c1e3e3e3ffc1ff81ffc7ffe7c1ff81ff81ff81ff81ffc1f7c3f7ffe3ffc0ff0","07e01ff83ffc7ffe7c3e7c1ff81f781f7c1e3e3e3ffc1ff81ffc7ffe7c1ff81ff81ff81ff81ffc1f7c3f7ffe3ffc0ff0","0ff01ffc3e3e7c3efc3ffc1ffc1ffc3f7c3e3c3e3ffc0ff83e7c7c3e7c1ff81ff81ff81ff81ff81ffc1f7c3e3ffe0ff8"],"9":["07c01ff03ffc7ffc7e7efc3ef81ef81ff81ff81ff81f7c3f7fff3fff1fff0f9f001f001e381e7c3e7ffc3ffc1ff80fe0","07c01ff03ffc7ffc7e7efc3ef81ef81ff81ff81ff81f7c3f7fff3fff1fff0f9f001f001e381e7c3e7ffc3ffc1ff80fe0","07f01ff83e7c7c3efc3efc1efc1ffc1ffc1ffc1ffc1f7c1f3fff1fff079f001f001f003f603e603e607c707c7ff83fc0"],"10":["0018383c783e787ef877d8679863986318e318e318e318e318e318e318e318e31863186318671867fe7eff7eff3efe1c","0018383c783e787ef877d8679863986318e318e318e318e318e318e318e318e31863186318671867fe7eff7eff3efe1c","181c383c7876f866f866386738e738e738e738e738e738e738e738e738e738e738e738e73867386738663876fe3efe1c"],"J":["01ff01ff01ff01ff001f001f001f001f001f001f001f001f001f001f001f001f001ff81ffc1ffc3f7ffe7ffe3ffc0ff0","01ff01ff01ff01ff001f001f001f001f001f001f001f001f001f001f001f001f001ff81ffc1ffc3f7ffe7ffe3ffc0ff0","0fff07ff00f800f800f800f800f800f800f800f800f800f800f800f800f800f800f800f8c0f8c1f8c1f0c3f0ffe0ff80"],"Q":["07e01ff83ffc7c3e781e700ff00ff00ff007f007f007f00ff00ff00f781e7c3e3ffc1ff807e001e001e000fc00fe003c","07e01ff83ffc7c3e781e700ff00ff00ff007f007f007f00ff00ff00f781e7c3e3ffc1ff807e001e001e000fc00fe003c","0ff01e783c1c781e780e700ff00ff00ff00ff00ff00ff00ff00f700f780e780e381c1c3c0ff803f000f8007c003f001f"],"K":["f01ef03ef03cf078f0f8f0f0f1e0f3c0f3c0f780ff00ff80ffc0ffc0fbe0f1e0f0f0f0f8f078f07cf03cf03ef01ef00f","f01ef03ef03cf078f0f8f0f0f1e0f3c0f3c0f780ff00ff80ffc0ffc0fbe0f1e0f0f0f0f8f078f07cf03cf03ef01ef00f","fe3efe3e3818383038303860386038c0398039803bc03fc03fc03fe039e039f038f038f83878387c383c383e7c1efe1f"],"A":["03c003e007e007e007e007f00f700e700e700e781e381c381c381c3c3ffc3ffc3ffc3ffe781e781e700e700ef00ff00f","03c003e007e007e007e007f00f700e700e700e781e381c381c381c3c3ffc3ffc3ffc3ffe781e781e700e700ef00ff00f","03c003c003c003e007e007e005e004e00cf00cf008f00870187818781ff81ff8303c303c303c203c201c601e703ef87f"]},"suits":{"♠":["00800080018001c003c003e007f00ff81ff83ffc7ffe7ffffffffffffffffffffeff7ebe3c9c018001c003c007e03ffe","00800080018001c003c003e007f00ff81ff83ffc7ffe7ffffffffffffffffffffeff7ebe3c9c018001c003c007e03ffe"],"♥":["3c1c7e3efe7fff7fffffffffffffffff7fff7ffe7ffe3ffc1ffc1ff80ff80ff007e007e003c003c001c0018001800080","3c1c7e3efe7fff7fffffffffffffffff7fff7ffe7ffe3ffc1ffc1ff80ff80ff007e007e003c003c001c0018001800080"],"♦":["0180018001c003c007e007f00ff01ff81ff83ffc7ffe7fffffff7ffe3ffe3ffc1ff80ff00ff007e003c003c001800180","0180018001c003c007e007f00ff01ff81ff83ffc7ffe7fffffff7ffe3ffe3ffc1ff80ff00ff007e003c003c001800180"],"♣":["018003c007e007e007f007f007f007e03ffc7ffe7fffffffffffffffffffffff7e7e7c3e399c018001c003c007e01ff8","018003c007e007e007f007f007f007e03ffc7ffe7fffffffffffffffffffffff7e7e7c3e399c018001c003c007e01ff8"]}};
+
+  function hexToBits(hex) {
+    const bits = new Uint8Array(GW * GH);
+    for (let i = 0; i < hex.length; i++) {
+      const v = parseInt(hex[i], 16);
+      for (let b = 0; b < 4; b++) bits[i * 4 + b] = (v >> (3 - b)) & 1;
+    }
+    return bits;
+  }
+
+  let decoded = null;
+  function templates() {
+    if (!decoded) {
+      decoded = { ranks: {}, suits: {} };
+      for (const r in TEMPLATES.ranks) decoded.ranks[r] = TEMPLATES.ranks[r].map(hexToBits);
+      for (const s in TEMPLATES.suits) decoded.suits[s] = TEMPLATES.suits[s].map(hexToBits);
+    }
+    return decoded;
+  }
+
+  // Grayscale + subsample in one pass.
+  function grayDown(data, w, h, step) {
+    const gw = Math.floor(w / step), gh = Math.floor(h / step);
+    const g = new Uint8Array(gw * gh);
+    for (let y = 0; y < gh; y++) {
+      for (let x = 0; x < gw; x++) {
+        const p = ((y * step) * w + (x * step)) * 4;
+        g[y * gw + x] = (data[p] * 3 + data[p + 1] * 4 + data[p + 2]) >> 3;
+      }
+    }
+    return { g, gw, gh };
+  }
+
+  function otsu(g) {
+    const hist = new Float64Array(256);
+    for (let i = 0; i < g.length; i++) hist[g[i]]++;
+    const total = g.length;
+    let sum = 0;
+    for (let i = 0; i < 256; i++) sum += i * hist[i];
+    let sumB = 0, wB = 0, best = 0, th = 127;
+    for (let t = 0; t < 256; t++) {
+      wB += hist[t];
+      if (wB === 0) continue;
+      const wF = total - wB;
+      if (wF === 0) break;
+      sumB += t * hist[t];
+      const mB = sumB / wB, mF = (sum - sumB) / wF;
+      const between = wB * wF * (mB - mF) * (mB - mF);
+      if (between > best) { best = between; th = t; }
+    }
+    return th;
+  }
+
+  // Connected components (4-neighbour) over a predicate; returns per-blob stats
+  // including the 4 diagonal extreme points used for quad corners.
+  function components(test, w, h) {
+    const seen = new Uint8Array(w * h);
+    const blobs = [];
+    const stackX = new Int32Array(w * h), stackY = new Int32Array(w * h);
+    for (let sy = 0; sy < h; sy++) {
+      for (let sx = 0; sx < w; sx++) {
+        const si = sy * w + sx;
+        if (seen[si] || !test(sx, sy)) continue;
+        let top = 0;
+        stackX[top] = sx; stackY[top] = sy; top++;
+        seen[si] = 1;
+        const b = { area: 0, x0: sx, y0: sy, x1: sx, y1: sy,
+                    tl: [sx, sy], br: [sx, sy], tr: [sx, sy], bl: [sx, sy] };
+        while (top > 0) {
+          top--;
+          const x = stackX[top], y = stackY[top];
+          b.area++;
+          if (x < b.x0) b.x0 = x; if (x > b.x1) b.x1 = x;
+          if (y < b.y0) b.y0 = y; if (y > b.y1) b.y1 = y;
+          if (x + y < b.tl[0] + b.tl[1]) b.tl = [x, y];
+          if (x + y > b.br[0] + b.br[1]) b.br = [x, y];
+          if (x - y > b.tr[0] - b.tr[1]) b.tr = [x, y];
+          if (x - y < b.bl[0] - b.bl[1]) b.bl = [x, y];
+          const nb = [[x - 1, y], [x + 1, y], [x, y - 1], [x, y + 1]];
+          for (const [nx, ny] of nb) {
+            if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+            const ni = ny * w + nx;
+            if (seen[ni] || !test(nx, ny)) continue;
+            seen[ni] = 1;
+            stackX[top] = nx; stackY[top] = ny; top++;
+          }
+        }
+        blobs.push(b);
+      }
+    }
+    return blobs;
+  }
+
+  // The card is the largest bright blob; corners from its diagonal extremes.
+  function findCardQuad(g, gw, gh) {
+    const th = Math.max(120, otsu(g));
+    const blobs = components((x, y) => g[y * gw + x] > th, gw, gh);
+    let best = null;
+    for (const b of blobs) if (!best || b.area > best.area) best = b;
+    if (!best) return null;
+    const frac = best.area / (gw * gh);
+    if (frac < 0.04 || frac > 0.85) return null;
+    const quad = [best.tl, best.tr, best.br, best.bl];
+    // convexity/fill check: blob should fill most of its quad
+    const qa = quadArea(quad);
+    if (qa <= 0 || best.area / qa < 0.7 || best.area / qa > 1.3) return null;
+    return quad;
+  }
+
+  function quadArea(q) {
+    let a = 0;
+    for (let i = 0; i < 4; i++) {
+      const [x1, y1] = q[i], [x2, y2] = q[(i + 1) % 4];
+      a += x1 * y2 - x2 * y1;
+    }
+    return Math.abs(a) / 2;
+  }
+
+  function dist(a, b) { return Math.hypot(a[0] - b[0], a[1] - b[1]); }
+
+  // Solve homography H (dst -> src) for dst corners (0,0),(CW-1,0),(CW-1,CH-1),(0,CH-1).
+  function solveH(src) {
+    const dst = [[0, 0], [CW - 1, 0], [CW - 1, CH - 1], [0, CH - 1]];
+    const A = [];
+    for (let i = 0; i < 4; i++) {
+      const [x, y] = dst[i], [X, Y] = src[i];
+      A.push([x, y, 1, 0, 0, 0, -x * X, -y * X, X]);
+      A.push([0, 0, 0, x, y, 1, -x * Y, -y * Y, Y]);
+    }
+    // gaussian elimination, 8 unknowns
+    for (let c = 0; c < 8; c++) {
+      let piv = c;
+      for (let r = c + 1; r < 8; r++) if (Math.abs(A[r][c]) > Math.abs(A[piv][c])) piv = r;
+      if (Math.abs(A[piv][c]) < 1e-9) return null;
+      [A[c], A[piv]] = [A[piv], A[c]];
+      for (let r = 0; r < 8; r++) {
+        if (r === c) continue;
+        const f = A[r][c] / A[c][c];
+        for (let k = c; k < 9; k++) A[r][k] -= f * A[c][k];
+      }
+    }
+    const hv = [];
+    for (let i = 0; i < 8; i++) hv.push(A[i][8] / A[i][i]);
+    hv.push(1);
+    return hv;
+  }
+
+  // Orient quad so the card comes out portrait, then inverse-warp RGB.
+  function warpCard(data, w, h, quad) {
+    let q = quad.slice();
+    if (dist(q[0], q[1]) > dist(q[1], q[2])) q = [q[1], q[2], q[3], q[0]]; // landscape -> rotate
+    const H = solveH(q);
+    if (!H) return null;
+    const out = new Uint8ClampedArray(CW * CH * 4);
+    for (let y = 0; y < CH; y++) {
+      for (let x = 0; x < CW; x++) {
+        const d = H[6] * x + H[7] * y + H[8];
+        const sx = Math.round((H[0] * x + H[1] * y + H[2]) / d);
+        const sy = Math.round((H[3] * x + H[4] * y + H[5]) / d);
+        const o = (y * CW + x) * 4;
+        if (sx >= 0 && sy >= 0 && sx < w && sy < h) {
+          const p = (sy * w + sx) * 4;
+          out[o] = data[p]; out[o + 1] = data[p + 1]; out[o + 2] = data[p + 2]; out[o + 3] = 255;
+        } else { out[o + 3] = 255; }
+      }
+    }
+    return { data: out, width: CW, height: CH };
+  }
+
+  // Normalize a glyph mask (bbox region of a binary image) to GWxGH bits.
+  function normalizeBits(mask, mw, x0, y0, x1, y1) {
+    const bits = new Uint8Array(GW * GH);
+    const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+    for (let gy = 0; gy < GH; gy++) {
+      for (let gx = 0; gx < GW; gx++) {
+        const sx0 = x0 + Math.floor(gx * bw / GW), sx1 = x0 + Math.max(Math.floor((gx + 1) * bw / GW) - 1, Math.floor(gx * bw / GW));
+        const sy0 = y0 + Math.floor(gy * bh / GH), sy1 = y0 + Math.max(Math.floor((gy + 1) * bh / GH) - 1, Math.floor(gy * bh / GH));
+        let on = 0, n = 0;
+        for (let sy = sy0; sy <= sy1; sy++) for (let sx = sx0; sx <= sx1; sx++) { on += mask[sy * mw + sx]; n++; }
+        bits[gy * GW + gx] = on / n >= 0.4 ? 1 : 0;
+      }
+    }
+    return bits;
+  }
+
+  function matchBits(a, b) {
+    let same = 0;
+    for (let i = 0; i < a.length; i++) if (a[i] === b[i]) same++;
+    return same / a.length;
+  }
+
+  function bestMatch(bits, tmplSets) {
+    let best = null;
+    for (const label in tmplSets) {
+      for (const t of tmplSets[label]) {
+        const s = matchBits(bits, t);
+        if (!best || s > best.score) best = { label, score: s };
+      }
+    }
+    return best;
+  }
+
+  // Read the index corner of a warped card. rot=true reads the opposite corner
+  // 180°-rotated (covers an upside-down warp).
+  function readCorner(card, rot) {
+    const SW = 54, SH = 128; // corner strip
+    const px = (x, y) => {
+      const rx = rot ? CW - 1 - x : x, ry = rot ? CH - 1 - y : y;
+      return (ry * CW + rx) * 4;
+    };
+    // strip grayscale + dark threshold (glyphs are dark on the white face)
+    const g = new Uint8Array(SW * SH);
+    for (let y = 0; y < SH; y++) for (let x = 0; x < SW; x++) {
+      const p = px(x, y);
+      g[y * SW + x] = (card.data[p] * 3 + card.data[p + 1] * 4 + card.data[p + 2]) >> 3;
+    }
+    const th = otsu(g);
+    const mask = new Uint8Array(SW * SH);
+    let dark = 0, darkSum = 0, brightSum = 0;
+    for (let i = 0; i < mask.length; i++) {
+      if (g[i] <= th) { mask[i] = 1; dark++; darkSum += g[i]; }
+      else brightSum += g[i];
+    }
+    const frac = dark / mask.length;
+    if (frac < 0.005 || frac > 0.5) return null; // no glyph-sized dark content
+    // demand real contrast between glyph and card face
+    if (brightSum / (mask.length - dark) - darkSum / dark < 50) return null;
+    let blobs = components((x, y) => mask[y * SW + x] === 1, SW, SH)
+      .filter(b => b.area >= 25 && b.x0 > 0 && b.y0 > 0 && b.x1 < SW - 1 && b.y1 < SH - 1);
+    if (!blobs.length) return null;
+    blobs.sort((a, b) => a.y0 - b.y0);
+    // group blobs sharing a vertical band: '1'+'0' of a 10 belong together
+    const groups = [];
+    for (const b of blobs) {
+      const grp = groups.find(gp => Math.min(gp.y1, b.y1) - Math.max(gp.y0, b.y0) > 0.5 * Math.min(gp.y1 - gp.y0, b.y1 - b.y0));
+      if (grp) {
+        grp.x0 = Math.min(grp.x0, b.x0); grp.y0 = Math.min(grp.y0, b.y0);
+        grp.x1 = Math.max(grp.x1, b.x1); grp.y1 = Math.max(grp.y1, b.y1);
+        grp.area += b.area;
+      } else groups.push({ x0: b.x0, y0: b.y0, x1: b.x1, y1: b.y1, area: b.area });
+    }
+    if (groups.length < 2) return null; // need rank + suit
+    // topmost band is the rank; everything below it is the suit glyph (which can
+    // split into blobs — e.g. a club's stem disconnects from its lobes)
+    const rankG = groups[0];
+    const suitG = groups.slice(1).reduce((a, b) => ({
+      x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0),
+      x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1),
+      area: a.area + b.area,
+    }));
+    const T = templates();
+    const rank = bestMatch(normalizeBits(mask, SW, rankG.x0, rankG.y0, rankG.x1, rankG.y1), T.ranks);
+    if (!rank) return null;
+    // color first (red/black from the suit glyph's pixels), then shape-match
+    // only against that color's two suits
+    let r = 0, gb = 0, n = 0;
+    for (let y = suitG.y0; y <= suitG.y1; y++) for (let x = suitG.x0; x <= suitG.x1; x++) {
+      if (!mask[y * SW + x]) continue;
+      const p = px(x, y);
+      r += card.data[p]; gb += (card.data[p + 1] + card.data[p + 2]) / 2; n++;
+    }
+    const isRed = n > 0 && (r - gb) / n > 22;
+    const pool = {};
+    for (const s of isRed ? ['♥', '♦'] : ['♠', '♣']) pool[s] = T.suits[s];
+    const suitShape = bestMatch(normalizeBits(mask, SW, suitG.x0, suitG.y0, suitG.x1, suitG.y1), pool);
+    if (!suitShape) return null;
+    const score = Math.min(rank.score, suitShape.score);
+    return { rank: rank.label, suit: suitShape.label, score };
+  }
+
+  const MIN_SCORE = 0.82;
+
+  function readCard(card) {
+    const a = readCorner(card, false);
+    const b = readCorner(card, true);
+    const good = [a, b].filter(r => r && r.score >= MIN_SCORE);
+    if (!good.length) return null;
+    if (good.length === 2 && (good[0].rank !== good[1].rank || good[0].suit !== good[1].suit)) return null;
+    return good.sort((x, y) => y.score - x.score)[0];
+  }
+
+  // Full pipeline on one RGBA frame. Returns {quad, read} (either may be null).
+  function detect(data, w, h) {
+    const STEP = 2;
+    const { g, gw, gh } = grayDown(data, w, h, STEP);
+    const q = findCardQuad(g, gw, gh);
+    if (!q) return { quad: null, read: null };
+    const quad = q.map(([x, y]) => [x * STEP, y * STEP]);
+    const card = warpCard(data, w, h, quad);
+    if (!card) return { quad, read: null };
+    return { quad, read: readCard(card) };
+  }
+
+  return { detect, readCard, readCorner, warpCard, solveH, otsu, components,
+           findCardQuad, normalizeBits, matchBits, hexToBits, grayDown,
+           TEMPLATES, CW, CH, GW, GH, MIN_SCORE };
+})();
+if (typeof module !== 'undefined') module.exports.Vision = Vision;
+</script>
+
+<script id="ui">
+(() => {
+  const $ = (sel) => document.querySelector(sel);
+  const grid = $('#grid');
+  const toast = $('#toast');
+
+  let mode = 'play';                 // 'play' (virtual deck) | 'live' (camera)
+  let vState = Engine.newGame();
+  let lState = null;
+  let armed = null;                  // {pile, dir} awaiting a physical card (live)
+  let sessionDrinks = 0;             // survives New game, dies with the tab — by design
+  let locked = false;                // swallow taps while the drink toast is up
+
+  const cur = () => (mode === 'live' ? lState : vState);
+  const pct = (p) => Math.round(p * 100) + '%';
+
+  function cardFace(pile, idx) {
+    if (!pile.cards.length) return `<div class="card empty">${idx + 1}</div>`;
+    const top = pile.cards[pile.cards.length - 1];
+    const color = Engine.RED[top.suit] ? 'red' : 'blk';
+    const height = pile.cards.length >= 3 ? 'h3' : 'h' + pile.cards.length;
+    return `<div class="card ${color} ${height}">
+      <div class="corner">${Engine.label(top.rank)}<br>${top.suit}</div>
+      <div class="pip">${top.suit}</div>
+      ${pile.alive ? '' : '<div class="x">✕</div>'}
+      <div class="count">×${pile.cards.length}</div>
+    </div>`;
+  }
+
+  function render(fx) {
+    const state = cur();
+    const setup = mode === 'live' && state.phase === 'setup';
+    const rec = state.over || setup ? null : Engine.recommend(state);
+    grid.innerHTML = state.piles.map((pile, i) => {
+      const isRec = rec && rec.pile === i;
+      const isArmed = armed && armed.pile === i;
+      const cls = ['pile', pile.alive ? '' : 'dead', isRec && !armed ? 'rec' : '',
+                   isArmed ? 'armed' : '',
+                   fx && fx.pile === i && fx.win ? 'won' : ''].join(' ');
+      let btns = '';
+      if (!setup && pile.cards.length) {
+        const p = Engine.probs(state, i);
+        btns = `<div class="btns">
+          <button class="guess ${isArmed && armed.dir === 'higher' ? 'armed' : isRec && !armed && rec.dir === 'higher' ? 'best' : ''}" data-i="${i}" data-dir="higher">
+            <span class="arrow">▲</span>${pct(p.higher)}</button>
+          <button class="guess ${isArmed && armed.dir === 'lower' ? 'armed' : isRec && !armed && rec.dir === 'lower' ? 'best' : ''}" data-i="${i}" data-dir="lower">
+            <span class="arrow">▼</span>${pct(p.lower)}</button>
+        </div>`;
+      }
+      return `<div class="${cls}" data-i="${i}">${cardFace(pile, i)}${btns}</div>`;
+    }).join('');
+    $('#deckCount').textContent = state.deck.length;
+    $('#drinkCount').textContent = sessionDrinks;
+    // win = surviving until the deck runs out; progress = draw deck consumed
+    if (setup) {
+      const scanned = state.piles.filter(p => p.cards.length).length;
+      $('#progressFill').style.width = '0%';
+      $('#progressLbl').textContent = `setting up · scan starting card ${scanned + 1} of 9`;
+    } else {
+      const total = 43, left = state.deck.length;
+      const pctDone = Math.round(((total - left) / total) * 100);
+      $('#progressFill').style.width = pctDone + '%';
+      $('#progressLbl').textContent = state.over && state.reason === 'deck'
+        ? 'deck cleared 🎉'
+        : `${left} card${left === 1 ? '' : 's'} left · ${pctDone}% to victory`;
+    }
+    $('#cam').classList.toggle('compact', mode === 'live' && state.phase === 'play');
+    renderLiveStatus();
+  }
+
+  function renderLiveStatus() {
+    const el = $('#liveStatus');
+    if (mode !== 'live') { el.classList.remove('show'); return; }
+    el.classList.add('show');
+    const state = cur();
+    if (state.over) el.textContent = 'game over — Undo or New game';
+    else if (state.phase === 'setup') el.textContent = '📷 show each starting card to the camera';
+    else if (armed) el.textContent = `${armed.dir === 'higher' ? '▲' : '▼'} armed on pile ${armed.pile + 1} — flip the card`;
+    else el.textContent = 'tap ▲/▼ on a pile, then flip the next card';
+  }
+
+  function showToast(sips, tie) {
+    toast.querySelector('.big').textContent = `DRINK ${sips} 🍺`;
+    toast.querySelector('.sub').textContent = tie ? 'tie — you live' : 'pile is dead';
+    toast.classList.add('show');
+    locked = true;
+    setTimeout(() => {
+      toast.classList.remove('show');
+      locked = false;
+      maybeGameOver();
+    }, 1100);
+  }
+
+  let readTimer = null;
+  function flashRead(card, note) {
+    const el = $('#readFlash');
+    const red = Engine.RED[card.suit];
+    el.innerHTML = `<span class="${red ? 'red' : ''}">${Engine.label(card.rank)}${card.suit}</span>${note ? ' ' + note : ''}`;
+    el.classList.add('show');
+    clearTimeout(readTimer);
+    readTimer = setTimeout(() => el.classList.remove('show'), 1400);
+  }
+
+  function maybeGameOver() {
+    const state = cur();
+    if (!state.over) return;
+    $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
+    $('#gameover .sub').innerHTML =
+      `This game: <b>${state.drinks}</b> sips<br>Session total: <b>${sessionDrinks}</b> sips`;
+    $('#gameover').classList.add('show');
+  }
+
+  function applyResult(i, result) {
+    if (!result.win) sessionDrinks += result.sips;
+    render(result.win ? { pile: i, win: true } : null);
+    if (result.win) {
+      setTimeout(() => { render(); maybeGameOver(); }, 450);
+    } else {
+      showToast(result.sips, result.tie);
+    }
+  }
+
+  function onGuess(i, dir) {
+    if (locked || cur().over) return;
+    if (mode === 'live') { // arm/disarm — the physical card resolves it
+      if (cur().phase !== 'play' || !cur().piles[i].alive) return;
+      armed = armed && armed.pile === i && armed.dir === dir ? null : { pile: i, dir };
+      render();
+      return;
+    }
+    const result = Engine.guess(vState, i, dir);
+    if (!result) return;
+    applyResult(i, result);
+  }
+
+  function reset() {
+    if (mode === 'live') { lState = Engine.newLive(); armed = null; gate.recent = []; gate.cool = 0; }
+    else vState = Engine.newGame();
+    $('#gameover').classList.remove('show');
+    toast.classList.remove('show');
+    locked = false;
+    render();
+  }
+
+  // ---- Live mode: camera + acceptance gate ----
+  const video = $('#camVideo');
+  const overlay = $('#camOverlay');
+  const gate = { recent: [], cool: 0 };  // temporal voting replaces a confirm tap
+  let stream = null, camTimer = null, workCanvas = null;
+
+  function camMsg(text) {
+    const el = $('#camMsg');
+    el.textContent = text || '';
+    el.classList.toggle('show', !!text);
+  }
+
+  async function startCam() {
+    camMsg('');
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      camMsg('No camera API here — open this page in your phone browser (HTTPS).');
+      return;
+    }
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: 'environment' }, width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+    } catch (e) {
+      camMsg(e && (e.name === 'NotAllowedError' || e.name === 'SecurityError')
+        ? 'Camera blocked. Allow camera access for this site, or host the file over HTTPS.'
+        : 'Camera unavailable: ' + (e && e.name || e));
+      return;
+    }
+    video.srcObject = stream;
+    try { await video.play(); } catch (_) {}
+    const track = stream.getVideoTracks()[0];
+    const caps = track.getCapabilities ? track.getCapabilities() : {};
+    if (caps.torch) {
+      const btn = $('#torchBtn');
+      btn.hidden = false;
+      let on = false;
+      btn.onclick = () => {
+        on = !on;
+        track.applyConstraints({ advanced: [{ torch: on }] }).catch(() => {});
+      };
+    }
+    camTimer = setInterval(camTick, 320);
+  }
+
+  function stopCam() {
+    clearInterval(camTimer); camTimer = null;
+    if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+    video.srcObject = null;
+    camMsg('');
+  }
+
+  function camTick() {
+    if (!video.videoWidth) return;
+    if (!workCanvas) workCanvas = document.createElement('canvas');
+    const w = 640, h = Math.round(640 * video.videoHeight / video.videoWidth);
+    workCanvas.width = w; workCanvas.height = h;
+    const ctx = workCanvas.getContext('2d', { willReadFrequently: true });
+    ctx.drawImage(video, 0, 0, w, h);
+    processFrame(ctx.getImageData(0, 0, w, h));
+  }
+
+  function drawOverlay(out, w, h) {
+    overlay.width = overlay.clientWidth; overlay.height = overlay.clientHeight;
+    const ctx = overlay.getContext('2d');
+    ctx.clearRect(0, 0, overlay.width, overlay.height);
+    if (!out || !out.quad) return;
+    // object-fit: cover mapping
+    const s = Math.max(overlay.width / w, overlay.height / h);
+    const ox = (overlay.width - w * s) / 2, oy = (overlay.height - h * s) / 2;
+    ctx.strokeStyle = out.read ? '#3ddc84' : '#ffc53d';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    out.quad.forEach(([x, y], i) => ctx[i ? 'lineTo' : 'moveTo'](x * s + ox, y * s + oy));
+    ctx.closePath();
+    ctx.stroke();
+    if (out.read) {
+      ctx.fillStyle = '#3ddc84';
+      ctx.font = '900 26px system-ui';
+      ctx.fillText(out.read.rank + out.read.suit, 10, 32);
+    }
+  }
+
+  const RANK_NUM = { J: 11, Q: 12, K: 13, A: 14 };
+  function processFrame(img) {
+    const out = Vision.detect(img.data, img.width, img.height);
+    drawOverlay(out, img.width, img.height);
+    feed(out.read);
+    return out;
+  }
+
+  // Accept a card only when the same read wins 3 of the last 5 frames, with a
+  // quiet gap after each accept — this stands in for the confirm tap.
+  function feed(read) {
+    const k = read ? read.rank + read.suit : null;
+    gate.recent.push(k);
+    if (gate.recent.length > 5) gate.recent.shift();
+    if (!k) { if (gate.cool > 0) gate.cool--; return; }
+    if (gate.cool > 0) return;
+    const votes = gate.recent.filter(x => x === k).length;
+    if (votes < 3) return;
+    accept(read.rank, read.suit);
+  }
+
+  function accept(rankLabel, suit) {
+    const state = lState;
+    if (!state || state.over || locked) return;
+    const rank = RANK_NUM[rankLabel] || parseInt(rankLabel, 10);
+    if (!rank) return;
+    let res = null;
+    if (state.phase === 'setup') {
+      res = Engine.liveSetup(state, rank, suit);
+      if (res && !res.dup) {
+        gate.cool = 4; gate.recent = [];
+        flashRead(res.card, res.done ? '— all set, play!' : `→ pile ${res.pile + 1}`);
+        render();
+      }
+      return;
+    }
+    if (!armed) return; // reading table noise with no guess armed — ignore
+    res = Engine.liveResolve(state, armed.pile, armed.dir, rank, suit);
+    if (!res || res.dup) return;
+    gate.cool = 4; gate.recent = [];
+    const i = armed.pile;
+    armed = null;
+    flashRead(res.card, res.win ? '— win' : res.tie ? '— tie' : '');
+    applyResult(i, res);
+  }
+
+  function undo() {
+    if (mode !== 'live' || !lState) return;
+    const before = lState.drinks;
+    if (!Engine.liveUndo(lState)) return;
+    sessionDrinks = Math.max(0, sessionDrinks - (before - lState.drinks));
+    armed = null;
+    gate.recent = []; gate.cool = 0;
+    $('#gameover').classList.remove('show');
+    render();
+  }
+
+  function setMode(m) {
+    if (m === mode) return;
+    mode = m;
+    armed = null;
+    const live = mode === 'live';
+    $('#cam').classList.toggle('show', live);
+    $('#modeBtn').classList.toggle('live', live);
+    $('#modeBtn').textContent = live ? '🎴 Play' : '📷 Live';
+    $('#rules').textContent = live
+      ? 'real deck · scan flips · undo fixes misreads · works best flat to the camera, torch on at night'
+      : '▲/▼ on any live pile · wrong = drink the pile & it dies · tie = drink, pile lives · Ace high';
+    $('#gameover').classList.remove('show');
+    if (live) {
+      if (!lState) lState = Engine.newLive();
+      startCam();
+    } else {
+      stopCam();
+    }
+    render();
+  }
+
+  grid.addEventListener('click', (e) => {
+    const btn = e.target.closest('.guess');
+    if (btn) onGuess(+btn.dataset.i, btn.dataset.dir);
+  });
+  $('#newgame').addEventListener('click', reset);
+  $('#again').addEventListener('click', reset);
+  $('#undoBtn').addEventListener('click', undo);
+  $('#modeBtn').addEventListener('click', () => setMode(mode === 'live' ? 'play' : 'live'));
+
+  render();
+  // test hooks
+  window.__game = { get state() { return vState; }, Engine, reset, onGuess };
+  window.__live = {
+    get state() { return lState; }, get mode() { return mode; }, get armed() { return armed; },
+    setMode, feed, accept, undo, processFrame, Vision,
+  };
+})();
+</script>
+</body>
+</html>
