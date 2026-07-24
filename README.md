@@ -23,9 +23,11 @@ in-page, no audio files.
   dies. **Tie → drink the same, but the pile survives.**
 - Every pile shows its exact win odds at all times, computed from the cards
   actually seen; the best bet pulses gold. Win by surviving until the deck runs out.
-- Ties flash the screen yellow. A real loss pulls a random punishment photo —
-  usually the tongue or the kid with the margarita, with a couple of rare drops
-  mixed in. Clearing the deck earns the victory photo (*Chillin*).
+- Ties flash the screen yellow with the kiss photo (a tie is like kissing your
+  sister). A real loss pulls a random punishment photo — usually the tongue or
+  the kid with the margarita, with rare drops mixed in — and busting a 6+ card
+  tower usually earns the kid with the can stack. Clearing the deck earns the
+  victory photo (*Chillin*).
 - The 🍺 counter counts drinking events — piles lost plus ties — not total sips.
 - The corner of the progress bar shows your live chance of winning the game,
   estimated by replaying the rest of the deck from the current position.
