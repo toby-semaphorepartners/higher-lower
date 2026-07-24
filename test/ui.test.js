@@ -118,6 +118,10 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if (!/^win (100|0)%$/.test(wcEnd)) fail('terminal win chance should be 0/100: ' + wcEnd);
   const goSub = await page.textContent('#gameover .sub');
   if (!/Score: \d+/.test(goSub)) fail('game over should show the final score: ' + goSub);
+  const badge = await page.textContent('#bestBadge');
+  if (!/best/i.test(badge)) fail('best-score badge missing: ' + badge);
+  if (!(await page.locator('#shareBtn').count())) fail('share button missing');
+  await page.locator('#shareBtn').click(); // must not crash (clipboard may be blocked headless)
   const scoreEnd = await page.textContent('#scoreChip');
   if (!/^\d+ pts$/.test(scoreEnd)) fail('score chip should show a number: ' + scoreEnd);
   await page.screenshot({ path: SCRATCH + '/shot-5-gameover.png' });

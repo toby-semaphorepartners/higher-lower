@@ -206,6 +206,9 @@
     background: #1e2530; color: #f2f4f8; border: 1px solid #303a4a;
     font-size: 18px; min-height: 52px; padding: 10px 24px;
   }
+  #gameover .row { display: flex; gap: 10px; }
+  #bestBadge { font-size: 17px; font-weight: 800; color: #9aa4b6; }
+  #bestBadge.new { font-size: 22px; font-weight: 900; color: #ffc53d; }
 
   /* ---- grid ---- */
   #grid {
@@ -446,9 +449,13 @@
   <img id="goImg" alt="" hidden>
   <div class="cap" id="goCap" hidden></div>
   <div class="big"></div>
+  <div id="bestBadge" hidden></div>
   <div class="sub"></div>
   <button id="again">New game</button>
-  <button id="editPlayers" class="alt">👥 Players</button>
+  <div class="row">
+    <button id="editPlayers" class="alt">👥 Players</button>
+    <button id="shareBtn" class="alt">📤 Share</button>
+  </div>
 </div>
 
 <div id="playersOv">
@@ -1152,6 +1159,22 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
 
   const cur = () => (mode === 'live' ? lState : vState);
   const pct = (p) => Math.round(p * 100) + '%';
+  const SITE = 'https://toby-semaphorepartners.github.io/higher-lower/';
+
+  // ---- device-local best scores, keyed by mode combo ----
+  const modeKey = (state) => state.live ? 'live'
+    : [state.nate ? 'nate' : '', state.werner ? 'werner' : ''].filter(Boolean).join('+') || 'normal';
+  const Best = {
+    load() { try { return JSON.parse(localStorage.getItem('hl.best')) || {}; } catch (_) { return {}; } },
+    get(k) { return Best.load()[k] || 0; },
+    set(k, v) {
+      try {
+        const m = Best.load();
+        m[k] = v;
+        localStorage.setItem('hl.best', JSON.stringify(m));
+      } catch (_) {}
+    },
+  };
   const esc = (s) => String(s).replace(/[&<>"']/g,
     (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 
@@ -1289,7 +1312,22 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     const state = cur();
     if (!state.over) return;
     const win = state.reason === 'deck';
-    if (win && !$('#gameover').classList.contains('show')) Sfx.fanfare();
+    const already = $('#gameover').classList.contains('show');
+    if (win && !already) Sfx.fanfare();
+    if (!already) {
+      // best score for this mode combo — the table's top player sets the mark
+      const k = modeKey(state);
+      const top = Math.max(...state.players.map(p => p.score));
+      const prev = Best.get(k);
+      const isNew = top > prev;
+      if (isNew) Best.set(k, top);
+      const bb = $('#bestBadge');
+      bb.hidden = false;
+      bb.classList.toggle('new', isNew);
+      bb.textContent = isNew
+        ? `NEW BEST 🎉 ${top} pts${prev ? ` (was ${prev})` : ''}`
+        : `best${k === 'normal' ? '' : ' ' + k} score: ${prev} pts`;
+    }
     $('#goImg').src = win ? ASSETS.win : ASSETS.lose;
     $('#goImg').hidden = !(win ? ASSETS.win : ASSETS.lose);
     $('#goCap').textContent = 'Chillin';
@@ -1415,6 +1453,30 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   $('#editPlayers').addEventListener('click', openPlayers);
   $('#turnStrip').addEventListener('click', openPlayers);
   $('#drinkStat').addEventListener('click', openPlayers);
+
+  // ---- share the result (Web Share API, clipboard fallback) ----
+  function shareText() {
+    const state = cur();
+    const k = modeKey(state);
+    const tag = { nate: '😎 Nate mode', werner: '🤪 Werner mode',
+                  'nate+werner': '😎🤪 Nate + Werner', live: '📷 live deck' }[k] || '';
+    const top = state.players.slice().sort((a, b) => b.score - a.score)[0];
+    const who = state.players.length > 1 ? `${top.name}: ` : '';
+    const end = state.reason === 'deck' ? 'deck cleared 🎉' : 'all piles dead 💀';
+    return `🍺 Higher/Lower — ${who}${top.score} pts · ${state.drinks} drinks · ${end}` +
+           `${tag ? ' · ' + tag : ''}\n${SITE}`;
+  }
+  $('#shareBtn').addEventListener('click', () => {
+    const text = shareText();
+    if (navigator.share) {
+      navigator.share({ text }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(text).then(() => {
+        $('#shareBtn').textContent = '✅ Copied';
+        setTimeout(() => { $('#shareBtn').textContent = '📤 Share'; }, 1500);
+      }).catch(() => {});
+    }
+  });
 
   function paintMute() {
     $('#muteBtn').textContent = Sfx.muted ? '🔇' : '🔊';

@@ -2,7 +2,8 @@
 
 A one-page multi-pile higher/lower drinking game. Dark, high-contrast, built for
 one-handed use outdoors at night. Single self-contained HTML file — no build, no
-dependencies, no backend, no tracking; all state is in-memory (refresh = fresh game).
+dependencies, no backend, no tracking. Game state is in-memory (refresh = fresh
+game); only best scores and the mute setting persist on your device.
 
 ## Play
 
@@ -61,7 +62,8 @@ risking) and a streak bonus of +50% per consecutive win on the same pile. Each
 ▲/▼ button shows its potential payout next to the odds, and your score sits in
 the left corner of the progress bar. At the end, untouched piles pay +75 each and
 clearing the deck adds +500 (+1500 in Nate mode). Ties and busts score nothing
-(and break the streak).
+(and break the streak). Your device remembers the best score per mode combo —
+beat it for the NEW BEST 🎉 badge — and 📤 Share posts your result anywhere.
 
 ## 📷 Live mode — count a real deck
 
