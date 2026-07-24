@@ -120,6 +120,16 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if (!/Score: \d+/.test(goSub)) fail('game over should show the final score: ' + goSub);
   const badge = await page.textContent('#bestBadge');
   if (!/best/i.test(badge)) fail('best-score badge missing: ' + badge);
+  // summary stats: closeness on a loss, story beats when they happened
+  const endSt = await page.evaluate(() => ({
+    reason: window.__game.state.reason, stats: window.__game.state.stats,
+  }));
+  const sumTxt = await page.textContent('#gameover .sub');
+  if (endSt.reason === 'dead' && !/from victory/.test(sumTxt)) {
+    fail('summary should say how close you were: ' + sumTxt);
+  }
+  if (endSt.stats.ties > 0 && !/tie/.test(sumTxt)) fail('summary should count ties: ' + sumTxt);
+  if (endSt.stats.closeWins > 0 && !/close win/.test(sumTxt)) fail('summary should count close wins: ' + sumTxt);
   if (!(await page.locator('#shareBtn').count())) fail('share button missing');
   await page.locator('#shareBtn').click(); // must not crash (clipboard may be blocked headless)
   const scoreEnd = await page.textContent('#scoreChip');
