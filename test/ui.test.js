@@ -131,6 +131,31 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if ((await page.textContent('#drinkCount')) !== sessionBefore) fail('session drink counter must survive new game');
   await page.screenshot({ path: SCRATCH + '/shot-6-newgame.png' });
 
+  // Nate mode: face-down deal, flip to play, everything leaky hidden
+  await page.locator('#nateBtn').click();
+  await page.waitForTimeout(200);
+  if ((await page.locator('.card.back').count()) !== 9) fail('nate: expected 9 face-down piles');
+  if ((await page.locator('.guess').count()) !== 0) fail('nate: no guess buttons before a flip');
+  if ((await page.locator('.pile.rec').count()) !== 0) fail('nate: no gold recommendation');
+  if ((await page.textContent('#winChance')) !== 'win ?%') fail('nate: win chance must be hidden');
+  if ((await page.textContent('#deckCount')) !== '43') fail('nate toggle should deal a fresh game');
+  await page.locator('.card.back[data-flip="4"]').click();
+  await page.waitForTimeout(200);
+  if ((await page.locator('.card.back').count()) !== 8) fail('nate: tap should flip the pile');
+  const nbtns = await page.locator('.guess').allTextContents();
+  if (nbtns.length !== 2 || nbtns.some(t => /%/.test(t))) fail('nate: revealed pile plays blind (no odds)');
+  await page.screenshot({ path: SCRATCH + '/shot-7-nate.png' });
+  await page.locator('.guess[data-i="4"][data-dir="higher"]').click();
+  await page.waitForTimeout(150);
+  if ((await page.textContent('#deckCount')) !== '42') fail('nate: blind guess should consume a card');
+  await page.waitForTimeout(1500); // let a possible drink toast clear
+  // toggling back restarts a normal face-up game
+  await page.locator('#nateBtn').click();
+  await page.waitForTimeout(200);
+  if ((await page.locator('.card.back').count()) !== 0) fail('nate off: face-up deal');
+  if ((await page.textContent('#deckCount')) !== '43') fail('nate off: fresh game');
+  if ((await page.locator('.guess.best').count()) !== 1) fail('nate off: recommendation returns');
+
   if (errors.length) fail('console errors: ' + errors.join(' | '));
   console.log(process.exitCode ? 'UI TESTS FAILED' : 'all UI checks passed');
   await browser.close();

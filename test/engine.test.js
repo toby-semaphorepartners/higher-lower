@@ -198,7 +198,28 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
   assert(st.score === 1100, 'final score = bonuses only');
 }
 
-// 10. winChance: Monte Carlo estimate of winning from the current position
+// 10. Nate mode: face-down deal, flip to play, tripled win bonus
+{
+  const st = Engine.newGame(makeRng(5), true);
+  assert(st.nate === true && st.piles.every(p => p.revealed === false), 'nate deal: all face down');
+  assert(Engine.guess(st, 0, 'higher') === null, 'cannot guess a face-down pile');
+  assert(st.deck.length === 43, 'blocked guess consumes nothing');
+  assert(Engine.recommend(st) === null, 'nothing to recommend while all face down');
+  assert(Engine.flip(st, 0) === true && st.piles[0].revealed, 'flip reveals a pile');
+  assert(Engine.flip(st, 0) === false, 'no double flip');
+  assert(Engine.recommend(st).pile === 0, 'recommend only sees revealed piles');
+  assert(Engine.guess(st, 0, 'higher') !== null, 'guess works after the flip');
+  const n = Engine.newGame(makeRng(5));
+  assert(!n.nate && n.piles.every(p => p.revealed), 'normal deal stays face up');
+  // clearing the deck blind pays the tripled bonus
+  const tiny = { deck: [{ rank: 14, suit: '♠' }], nate: true,
+    piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true, revealed: true })),
+    drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null };
+  Engine.guess(tiny, 0, 'higher');
+  assert(tiny.over && tiny.bonus.win === 1500, 'nate victory bonus is 1500');
+}
+
+// 11. winChance: Monte Carlo estimate of winning from the current position
 {
   const mk = (tops, deckRanks) => ({
     deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),

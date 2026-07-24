@@ -25,6 +25,14 @@ context) — or just open it locally for the on-screen game.
 - The corner of the progress bar shows your live chance of winning the game,
   estimated by replaying the rest of the deck from the current position.
 
+## 😎 Nate mode
+
+Tap 😎 to restart with all nine piles dealt face-down. Pick a pile to flip over,
+then play it on pure gut: no odds, no payouts, no gold hints, no win estimate —
+any of those would give the cards away. Flip more piles whenever you like;
+face-down piles can't be guessed on. Clearing the deck blind pays a tripled
+**+1500** victory bonus. Tapping 😎 (either way) always deals a fresh game.
+
 ## Scoring
 
 Risk pays. A winning guess earns **100 × (1 − its shown odds)** — a coin flip pays
@@ -32,7 +40,8 @@ Risk pays. A winning guess earns **100 × (1 − its shown odds)** — a coin fl
 risking) and a streak bonus of +50% per consecutive win on the same pile. Each
 ▲/▼ button shows its potential payout next to the odds, and your score sits in
 the left corner of the progress bar. At the end, untouched piles pay +75 each and
-clearing the deck adds +500. Ties and busts score nothing (and break the streak).
+clearing the deck adds +500 (+1500 in Nate mode). Ties and busts score nothing
+(and break the streak).
 
 ## 📷 Live mode — count a real deck
 
