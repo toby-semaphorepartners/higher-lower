@@ -173,9 +173,10 @@
   #playersOv {
     position: fixed; inset: 0; z-index: 40;
     display: none;
-    align-items: center; justify-content: center; flex-direction: column; gap: 14px;
+    align-items: center; flex-direction: column; gap: 14px;
     background: rgba(11, 14, 20, .96);
     padding: 24px;
+    overflow-y: auto;
   }
   #playersOv.show { display: flex; }
   #playersOv .big { font-size: 30px; font-weight: 900; }
@@ -202,6 +203,32 @@
     cursor: pointer;
   }
   #playersDone:active, #addPlayer:active { transform: scale(.96); }
+  /* ---- mode explainer ---- */
+  #modeOv {
+    position: fixed; inset: 0; z-index: 45;
+    display: none;
+    align-items: center; flex-direction: column; gap: 16px;
+    background: rgba(11, 14, 20, .96);
+    padding: 28px; text-align: center;
+    overflow-y: auto;
+  }
+  #modeOv.show { display: flex; }
+  #modeOv .big { font-size: 32px; font-weight: 900; }
+  #modeOv ul {
+    list-style: none;
+    display: flex; flex-direction: column; gap: 10px;
+    font-size: 17px; font-weight: 700; color: #aeb7c6;
+    max-width: 340px; line-height: 1.45;
+  }
+  #modeOv .payoff { color: #ffc53d; }
+  #modeOvOk {
+    min-height: 56px; padding: 12px 36px;
+    font: inherit; font-size: 20px; font-weight: 900; color: #0b0e14;
+    background: #ffc53d; border: none; border-radius: 16px;
+    cursor: pointer;
+  }
+  #modeOvOk:active { transform: scale(.96); }
+
   #gameover button.alt {
     background: #1e2530; color: #f2f4f8; border: 1px solid #303a4a;
     font-size: 18px; min-height: 52px; padding: 10px 24px;
@@ -420,11 +447,17 @@
   #gameover {
     position: fixed; inset: 0; z-index: 30;
     display: none;
-    align-items: center; justify-content: center; flex-direction: column; gap: 18px;
+    align-items: center; flex-direction: column; gap: 18px;
     background: rgba(11, 14, 20, .96);
     text-align: center; padding: 24px;
+    overflow-y: auto;
   }
   #gameover.show { display: flex; }
+  /* center when short, scroll when tall — the pseudo spacers collapse first */
+  #gameover::before, #gameover::after,
+  #playersOv::before, #playersOv::after,
+  #modeOv::before, #modeOv::after { content: ""; flex: 1 0 0; }
+  #gameover > *, #playersOv > *, #modeOv > * { flex-shrink: 0; }
   #confetti { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
   #gameover img {
     max-width: 78vw; max-height: 38vh;
@@ -456,7 +489,7 @@
     <div class="stat"><span class="lbl">Deck</span><span id="deckCount">–</span></div>
     <div class="stat" id="drinkStat" title="Your session drinks — tap to manage players" style="cursor:pointer">🍺<span id="drinkCount">0</span></div>
     <button id="modeBtn" title="Toggle camera Live mode">📷 Live</button>
-    <button id="nateBtn" title="Nate mode: face-down deal, flip to play, triple win bonus">😎</button>
+    <button id="nateBtn" title="Nasty Nate: face-down deal, flip to play, triple win bonus">😎</button>
     <button id="wernerBtn" title="Wacky Werner: once you guess a pile you're stuck with it until it busts">🤪</button>
     <button id="newgame">New</button>
   </header>
@@ -494,6 +527,12 @@
     <button id="editPlayers" class="alt">👥 Players</button>
     <button id="shareBtn" class="alt">📤 Share</button>
   </div>
+</div>
+
+<div id="modeOv">
+  <div class="big"></div>
+  <ul></ul>
+  <button id="modeOvOk">Got it 🍺</button>
 </div>
 
 <div id="playersOv">
@@ -547,6 +586,7 @@ const Engine = (() => {
              nate: !!nate, werner: !!werner, lock: -1,
              players: mkPlayers(names), turn: 0,
              stats: { ties: 0, badBreaks: 0, closeWins: 0 },
+             scoreParts: { odds: 0, height: 0, streak: 0, big: 0 },
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -676,7 +716,15 @@ const Engine = (() => {
       // × streak bonus (+50% per consecutive win on this same pile)
       const n = state.streak.pile === i ? state.streak.n + 1 : 1;
       state.streak = { pile: i, n };
-      pts = Math.round(100 * (1 - p) * pile.cards.length * (1 + 0.5 * (n - 1)));
+      // decomposed for the summary breakdown: odds pay × height × streak
+      const b0 = 100 * (1 - p);
+      const withH = b0 * pile.cards.length;
+      const withS = withH * (1 + 0.5 * (n - 1));
+      pts = Math.round(withS);
+      state.scoreParts.odds += b0;
+      state.scoreParts.height += withH - b0;
+      state.scoreParts.streak += withS - withH;
+      if (pts > state.scoreParts.big) state.scoreParts.big = pts;
       state.score += pts;
       state.players[actor].score += pts;
       if (Math.abs(card.rank - top.rank) === 1) state.stats.closeWins++; // by a single rank
@@ -722,6 +770,7 @@ const Engine = (() => {
              drinks: 0, over: false, reason: null, history: [],
              players: mkPlayers(names), turn: 0,
              stats: { ties: 0, badBreaks: 0, closeWins: 0 },
+             scoreParts: { odds: 0, height: 0, streak: 0, big: 0 },
              score: 0, streak: { pile: -1, n: 0 }, bonus: null };
   }
 
@@ -730,6 +779,7 @@ const Engine = (() => {
       phase: state.phase, deck: state.deck, piles: state.piles,
       drinks: state.drinks, over: state.over, reason: state.reason,
       players: state.players, turn: state.turn, stats: state.stats,
+      scoreParts: state.scoreParts,
       score: state.score, streak: state.streak, bonus: state.bonus,
     }));
   }
@@ -1414,7 +1464,20 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     $('#goCap').hidden = !win;
     $('#gameover .big').textContent = state.reason === 'deck' ? 'Deck done 🎉' : 'All piles dead 💀';
     const b = state.bonus || { untouched: 0, win: 0 };
-    const bonusTxt = (b.untouched ? ` (+${b.untouched} untouched)` : '') + (b.win ? ` (+${b.win} clear)` : '');
+    // score breakdown: where the points actually came from
+    const sp = state.scoreParts || { odds: 0, height: 0, streak: 0, big: 0 };
+    const fmt = (v) => Math.round(v).toLocaleString();
+    const parts = [];
+    if (sp.odds >= 1) parts.push(`🎯 odds ${fmt(sp.odds)}`);
+    if (sp.height >= 1) parts.push(`📚 stack size +${fmt(sp.height)}`);
+    if (sp.streak >= 1) parts.push(`🔥 streaks +${fmt(sp.streak)}`);
+    const bonusBits = [];
+    if (b.untouched) bonusBits.push(`🂠 untouched +${fmt(b.untouched)}`);
+    if (b.win) bonusBits.push(`${state.nate ? '😎 ' : ''}deck cleared +${fmt(b.win)}`);
+    let breakdown = '';
+    if (parts.length) breakdown += `<br><span class="beats">${parts.join(' · ')}</span>`;
+    if (sp.big >= 1) breakdown += `<br><span class="beats">💥 biggest hit +${fmt(sp.big)}</span>`;
+    if (bonusBits.length) breakdown += `<br><span class="beats">${bonusBits.join(' · ')}</span>`;
     // post-game stats: how close it was, plus the game's story beats
     const s = state.stats || { ties: 0, badBreaks: 0, closeWins: 0 };
     const n = (v, w) => `${v} ${w}${v === 1 ? '' : 's'}`;
@@ -1442,12 +1505,11 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       $('#gameover .sub').innerHTML = ranked.map((p, k) =>
         `${k === 0 ? '🏆 ' : ''}<b>${esc(p.name)}</b> — ${p.score} pts · ${p.drinks} 🍺` +
         `${maxD > 0 && p.drinks === maxD ? ' 🥴' : ''}`).join('<br>') +
-        (bonusTxt ? `<br><span style="color:#9aa4b6">end bonuses${bonusTxt}</span>` : '') +
-        statsTxt;
+        breakdown + statsTxt;
     } else {
       $('#gameover .sub').innerHTML =
-        `Score: <b>${state.score}</b>${bonusTxt}<br>` +
-        `This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>` +
+        `Score: <b>${state.score}</b>` + breakdown +
+        `<br>This game: <b>${state.drinks}</b> drink${state.drinks === 1 ? '' : 's'}<br>` +
         `Session total: <b>${sessionDrinks[state.players[0].name] || 0}</b>` +
         statsTxt;
     }
@@ -1497,11 +1559,34 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
       return;
     }
     const bits = [nate
-      ? '😎 face-down deal · tap a pile to flip it · no odds, no hints · clear the deck for +1500'
+      ? '😎 Nasty Nate · face-down deal · tap a pile to flip it · no odds, no hints · +1500 for the deck'
       : '▲/▼ on any live pile · wrong = drink the pile & it dies · tie = drink, pile lives · Ace high'];
-    if (werner) bits.push('🤪 stuck with your pile till it busts');
+    if (werner) bits.push('🤪 Wacky Werner · stuck with your pile till it busts');
     $('#rules').textContent = bits.join(' · ');
   }
+
+  const MODE_INFO = {
+    nate: { title: '😎 Nasty Nate', bullets: [
+      'Cards are dealt <b>face-down</b> — tap a pile to flip it, then ride your gut.',
+      'No odds, no payouts, no gold hints, no win% — any of those would give the cards away.',
+      'Flip more piles whenever you like; face-down piles can’t be guessed on.',
+      '<span class="payoff">Clear the deck blind for a tripled +1500 bonus.</span>',
+    ] },
+    werner: { title: '🤪 Wacky Werner', bullets: [
+      'Your guess <b>locks you to that pile</b> — a win or tie keeps you stuck until it busts.',
+      'Everyone else’s ▲/▼ grey out, odds still showing, until you’re free.',
+      'Pass-and-play: the next player <b>inherits</b> your stuck pile. Choose kindly.',
+      '<span class="payoff">Streaks stack fast when you’re forced to ride — so does the drink count.</span>',
+    ] },
+  };
+
+  function showModeInfo(which) {
+    const info = MODE_INFO[which];
+    $('#modeOv .big').textContent = info.title;
+    $('#modeOv ul').innerHTML = info.bullets.map(b => `<li>${b}</li>`).join('');
+    $('#modeOv').classList.add('show');
+  }
+  $('#modeOvOk').addEventListener('click', () => $('#modeOv').classList.remove('show'));
 
   function toggleVariant(which) {
     if (which === 'nate') nate = !nate;
@@ -1511,6 +1596,7 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
     if (mode === 'live') { setMode('play'); } // variants are virtual-deck games
     reset(); // switching always deals a fresh game
     updateRules();
+    if (which === 'nate' ? nate : werner) showModeInfo(which); // explain on the way in
   }
 
   function onFlip(i) {
@@ -1590,8 +1676,8 @@ window.GAME_ASSETS = { win: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/
   function shareText() {
     const state = cur();
     const k = modeKey(state);
-    const tag = { nate: '😎 Nate mode', werner: '🤪 Werner mode',
-                  'nate+werner': '😎🤪 Nate + Werner', live: '📷 live deck' }[k] || '';
+    const tag = { nate: '😎 Nasty Nate', werner: '🤪 Wacky Werner',
+                  'nate+werner': '😎🤪 Nasty Nate + Wacky Werner', live: '📷 live deck' }[k] || '';
     const top = state.players.slice().sort((a, b) => b.score - a.score)[0];
     const who = state.players.length > 1 ? `${top.name}: ` : '';
     const end = state.reason === 'deck' ? 'deck cleared 🎉' : 'all piles dead 💀';

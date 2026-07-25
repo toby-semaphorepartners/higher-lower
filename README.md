@@ -40,24 +40,26 @@ Tap the 🍺 chip (or the turn strip, or 👥 on the game-over screen) to add up
 8 named players. Turns rotate automatically after every guess; the turn strip
 shows who's up and who's next, the drink toast names who drinks, and the
 game-over screen becomes a leaderboard — 🏆 top score, 🥴 biggest drinker. In
-Wacky Werner the stuck pile passes to the next player; in Nate mode flipping a
+Wacky Werner the stuck pile passes to the next player; in Nasty Nate flipping a
 pile is free. Changing the roster deals a fresh game. Solo play is unchanged.
 
-## 😎 Nate mode
+## 😎 Nasty Nate
 
 Tap 😎 to restart with all nine piles dealt face-down. Pick a pile to flip over,
 then play it on pure gut: no odds, no payouts, no gold hints, no win estimate —
 any of those would give the cards away. Flip more piles whenever you like;
 face-down piles can't be guessed on. Clearing the deck blind pays a tripled
-**+1500** victory bonus. Tapping 😎 (either way) always deals a fresh game.
+**+1500** victory bonus. Tapping 😎 (either way) always deals a fresh game, and
+switching it on shows a quick explainer of the rules.
 
 ## 🤪 Wacky Werner
 
 Tap 🤪 and the moment you guess on a pile you're stuck with it — ▲/▼ grey out
 everywhere else (odds stay visible) — until it busts. Then pick your next
 victim. The win estimate
-knows the rule and prices your chances accordingly. Stacks with Nate mode for
-the full blindfolded-and-handcuffed experience. Toggling deals a fresh game.
+knows the rule and prices your chances accordingly. Stacks with Nasty Nate for
+the full blindfolded-and-handcuffed experience. Toggling deals a fresh game and
+shows a quick explainer on the way in.
 
 ## Scoring
 
@@ -66,13 +68,15 @@ Risk pays. A winning guess earns **100 × (1 − its shown odds)** — a coin fl
 risking) and a streak bonus of +50% per consecutive win on the same pile. Each
 ▲/▼ button shows its potential payout next to the odds, and your score sits in
 the left corner of the progress bar. At the end, untouched piles pay +75 each and
-clearing the deck adds +500 (+1500 in Nate mode). Ties and busts score nothing
+clearing the deck adds +500 (+1500 in Nasty Nate). Ties and busts score nothing
 (and break the streak). Your device remembers the best score per mode combo —
 beat it for the NEW BEST 🎉 badge — and 📤 Share posts your result anywhere.
-The summary also tells the game's story: the final board (every stack as it
-ended, face-down piles revealed), how many stacks were still standing, how many
-cards you were from victory, ⚡ close wins (won by a single rank), 💋 ties, and
-💔 bad breaks (busting as a 75%-or-better favorite).
+The summary also tells the game's story: a full score breakdown (🎯 base odds
+pay, 📚 stack-size multiplier, 🔥 streak bonuses, 💥 your biggest single hit,
+plus the end bonuses), the final board (every stack as it ended, face-down piles
+revealed), how many stacks were still standing, how many cards you were from
+victory, ⚡ close wins (won by a single rank), 💋 ties, and 💔 bad breaks
+(busting as a 75%-or-better favorite).
 
 ## 📷 Live mode — count a real deck
 

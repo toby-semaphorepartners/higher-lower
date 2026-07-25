@@ -136,6 +136,8 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   const chipAlive = await page.locator('#goBoard .gp:not(.dead)').count();
   if (chipAlive !== aliveN) fail(`final board alive chips ${chipAlive} != ${aliveN}`);
   if (aliveN > 0 && !/still standing/.test(sumTxt)) fail('summary should count standing stacks: ' + sumTxt);
+  const endScore = await page.evaluate(() => window.__game.state.score);
+  if (endScore > 0 && !/odds/.test(sumTxt)) fail('summary should break down the score: ' + sumTxt);
   if (!(await page.locator('#shareBtn').count())) fail('share button missing');
   await page.locator('#shareBtn').click(); // must not crash (clipboard may be blocked headless)
   const scoreEnd = await page.textContent('#scoreChip');
@@ -151,9 +153,15 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   if ((await page.textContent('#drinkCount')) !== sessionBefore) fail('session drink counter must survive new game');
   await page.screenshot({ path: SCRATCH + '/shot-6-newgame.png' });
 
-  // Nate mode: face-down deal, flip to play, everything leaky hidden
+  // Nasty Nate: face-down deal, flip to play, everything leaky hidden
   await page.locator('#nateBtn').click();
   await page.waitForTimeout(200);
+  if (!(await page.locator('#modeOv.show').count())) fail('nate: explainer should show on the way in');
+  const nateInfo = await page.textContent('#modeOv .big');
+  if (!/Nasty Nate/.test(nateInfo)) fail('nate: explainer should name the mode: ' + nateInfo);
+  await page.screenshot({ path: SCRATCH + '/shot-11-nate-info.png' });
+  await page.locator('#modeOvOk').click();
+  await page.waitForTimeout(100);
   if ((await page.locator('.card.back').count()) !== 9) fail('nate: expected 9 face-down piles');
   if ((await page.locator('.guess').count()) !== 0) fail('nate: no guess buttons before a flip');
   if ((await page.locator('.pile.rec').count()) !== 0) fail('nate: no gold recommendation');
@@ -179,6 +187,9 @@ require('fs').mkdirSync(SCRATCH, { recursive: true });
   // Wacky Werner: guessing a pile locks you to it until it busts
   await page.locator('#wernerBtn').click();
   await page.waitForTimeout(200);
+  if (!/Wacky Werner/.test(await page.textContent('#modeOv .big'))) fail('werner: explainer should name the mode');
+  await page.locator('#modeOvOk').click();
+  await page.waitForTimeout(100);
   if ((await page.textContent('#deckCount')) !== '43') fail('werner toggle should deal a fresh game');
   if ((await page.locator('.guess').count()) !== 18) fail('werner: all piles playable before the first guess');
   const wst = await page.evaluate(() => {

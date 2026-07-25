@@ -192,7 +192,7 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
     piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true })),
     drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
     players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0,
-    stats: { ties: 0, badBreaks: 0, closeWins: 0 } };
+    stats: { ties: 0, badBreaks: 0, closeWins: 0 }, scoreParts: { odds: 0, height: 0, streak: 0, big: 0 } };
   const rr = Engine.guess(st, 0, 'higher'); // p = 1: the sure thing pays nothing
   assert(rr.win && rr.pts === 0, 'sure thing pays 0');
   assert(st.over && st.reason === 'deck', 'deck exhausted ends the game');
@@ -218,7 +218,7 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
     piles: Array.from({ length: 9 }, () => ({ cards: [{ rank: 2, suit: '♥' }], alive: true, revealed: true })),
     drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
     players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0,
-    stats: { ties: 0, badBreaks: 0, closeWins: 0 } };
+    stats: { ties: 0, badBreaks: 0, closeWins: 0 }, scoreParts: { odds: 0, height: 0, streak: 0, big: 0 } };
   Engine.guess(tiny, 0, 'higher');
   assert(tiny.over && tiny.bonus.win === 1500, 'nate victory bonus is 1500');
 }
@@ -231,7 +231,7 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
             { cards: [{ rank: 7, suit: '♦' }], alive: true, revealed: true }],
     drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
     players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0,
-    stats: { ties: 0, badBreaks: 0, closeWins: 0 },
+    stats: { ties: 0, badBreaks: 0, closeWins: 0 }, scoreParts: { odds: 0, height: 0, streak: 0, big: 0 },
   });
   const fresh = Engine.newGame(makeRng(21), false, true);
   assert(fresh.werner === true && fresh.lock === -1, 'werner deal starts unlocked');
@@ -294,7 +294,7 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
     piles: tops.map(r => ({ cards: [{ rank: r, suit: '♥' }], alive: true, revealed: true })),
     drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
     players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0,
-    stats: { ties: 0, badBreaks: 0, closeWins: 0 },
+    stats: { ties: 0, badBreaks: 0, closeWins: 0 }, scoreParts: { odds: 0, height: 0, streak: 0, big: 0 },
   });
   assert(Engine.newGame(makeRng(1)).stats.ties === 0, 'fresh game has zeroed stats');
   // close win: top 7, draw 8 higher — exactly one rank; then a comfortable win
@@ -333,7 +333,7 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
     piles: [{ cards: [{ rank: 8, suit: '♥' }], alive: true, revealed: true }],
     drinks: 0, over: false, reason: null, score: 0, streak: { pile: -1, n: 0 }, bonus: null,
     players: [{ name: 'You', drinks: 0, score: 0 }], turn: 0,
-    stats: { ties: 0, badBreaks: 0, closeWins: 0 },
+    stats: { ties: 0, badBreaks: 0, closeWins: 0 }, scoreParts: { odds: 0, height: 0, streak: 0, big: 0 },
   });
   const s = mk5050();
   const r1 = Engine.recommend(s);
@@ -347,7 +347,25 @@ assert(Engine.recommend(lv).pile === 0, 'recommend works on live state');
   assert(r2.pile === 1 && r2.dir === 'higher' && !r2.flip, 'lopsided pile recommended without a flip');
 }
 
-// 15. winChance: Monte Carlo estimate of winning from the current position
+// 15. score breakdown parts: odds / height / streak / biggest hit
+{
+  const lv = Engine.newLive();
+  [[14, '♠'], [2, '♥'], [7, '♦'], [7, '♣'], [11, '♠'], [12, '♥'], [13, '♦'], [3, '♣'], [9, '♠']]
+    .forEach(([r, s]) => Engine.liveSetup(lv, r, s));
+  Engine.liveResolve(lv, 1, 'higher', 10, '♠'); // fresh-pile win (14 pts)
+  assert(lv.scoreParts.odds > 0 && lv.scoreParts.height > 0, 'odds and height parts accrue');
+  assert(lv.scoreParts.streak === 0, 'no streak part on a first win');
+  assert(lv.scoreParts.big === 14, 'biggest hit tracked');
+  Engine.liveResolve(lv, 1, 'higher', 13, '♥'); // consecutive win on the same pile
+  assert(lv.scoreParts.streak > 0, 'streak part accrues on consecutive wins');
+  assert(lv.scoreParts.big > 14, 'biggest hit updates');
+  const partSum = lv.scoreParts.odds + lv.scoreParts.height + lv.scoreParts.streak;
+  assert(Math.abs(partSum - lv.score) <= 1, `parts sum ≈ score (${partSum} vs ${lv.score})`);
+  Engine.liveUndo(lv); Engine.liveUndo(lv);
+  assert(lv.scoreParts.odds === 0 && lv.scoreParts.big === 0, 'undo rolls the breakdown back');
+}
+
+// 16. winChance: Monte Carlo estimate of winning from the current position
 {
   const mk = (tops, deckRanks) => ({
     deck: deckRanks.map(r => ({ rank: r, suit: '♠' })),
